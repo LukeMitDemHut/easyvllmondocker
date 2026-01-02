@@ -1,0 +1,87 @@
+services:
+  # --- GATEWAY ---
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    ports: ["${GATEWAY_PORT:-8000}:4000"]
+    container_name: litellm
+    volumes:
+      - ./model_config:/model_config:ro
+    working_dir: /model_config
+    entrypoint: ["litellm", "--config", "/model_config/litellm_config.yaml"]
+
+    environment:
+      - DATABASE_URL=postgresql://llm_admin:${POSTGRES_PASSWORD}@postgres:5432/litellm
+      - STORE_MODEL_IN_DB=True
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY}
+      - UI_USERNAME=${LITELLM_USERNAME}
+      - UI_PASSWORD=${LITELLM_PASSWORD}
+    depends_on: [postgres]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=litellm
+      - POSTGRES_USER=llm_admin
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # --- PROMETHEUS ---
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus_config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    restart: unless-stopped
+
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    container_name: node_exporter
+    command:
+      - "--path.rootfs=/host"
+    pid: host
+    restart: unless-stopped
+    volumes:
+      - "/:/host:ro,rslave"
+
+  dcgm_exporter:
+    image: nvidia/dcgm-exporter:latest
+    container_name: dcgm_exporter
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    restart: unless-stopped
+
+  # --- GRAFANA ---
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana_config/datasources:/etc/grafana/provisioning/datasources/
+      - ./grafana_config/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./grafana_config/dashboards:/etc/grafana/provisioning/dashboards/
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/home.json
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+networks:
+  default:
+    name: inference_default
+
+volumes:
+  prometheus_data:
+    driver: local
+  postgres_data:
+    driver: local

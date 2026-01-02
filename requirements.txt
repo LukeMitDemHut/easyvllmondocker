@@ -1,0 +1,2 @@
+# Python dependencies for the serve CLI tool
+PyYAML>=6.0

@@ -1,0 +1,557 @@
+{
+  "uid": "litellm-dashboard",
+  "title": "LiteLLM Gateway",
+  "tags": ["litellm", "gateway", "proxy"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "type": "stat",
+      "title": "Total Requests",
+      "targets": [
+        {
+          "expr": "sum(rate(litellm_proxy_total_requests_metric_total[1m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "decimals": 2,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 50,
+                "color": "yellow"
+              },
+              {
+                "value": 100,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "type": "stat",
+      "title": "Failed Requests",
+      "targets": [
+        {
+          "expr": "sum(rate(litellm_proxy_total_requests_metric_total{status_code!~\"2..\"}[1m])) or vector(0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "decimals": 2,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "yellow"
+              },
+              {
+                "value": 5,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "type": "stat",
+      "title": "Success Rate",
+      "targets": [
+        {
+          "expr": "(sum(rate(litellm_proxy_total_requests_metric_total{status_code=~\"2..\"}[1m])) / sum(rate(litellm_proxy_total_requests_metric_total[1m]))) * 100",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "red"
+              },
+              {
+                "value": 95,
+                "color": "yellow"
+              },
+              {
+                "value": 99,
+                "color": "green"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "type": "stat",
+      "title": "Avg Total Latency",
+      "targets": [
+        {
+          "expr": "rate(litellm_request_total_latency_metric_sum[1m]) / rate(litellm_request_total_latency_metric_count[1m])",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "none",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Request Metrics by Model",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      }
+    },
+    {
+      "id": 11,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
+      "type": "timeseries",
+      "title": "Requests by Model",
+      "targets": [
+        {
+          "expr": "sum by (requested_model) (rate(litellm_deployment_total_requests_total[1m]))",
+          "refId": "A",
+          "legendFormat": "{{requested_model}}",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 12,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
+      "type": "timeseries",
+      "title": "Success vs Failed Requests by Model",
+      "targets": [
+        {
+          "expr": "sum by (requested_model) (rate(litellm_deployment_success_responses_total[1m]))",
+          "refId": "A",
+          "legendFormat": "{{requested_model}} Success",
+          "datasource": {
+            "type": "prometheus"
+          }
+        },
+        {
+          "expr": "sum by (requested_model) (rate(litellm_deployment_failure_responses_total[1m]))",
+          "refId": "B",
+          "legendFormat": "{{requested_model}} Failed",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Latency Metrics",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      }
+    },
+    {
+      "id": 21,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "type": "timeseries",
+      "title": "Gateway Overhead Latency",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(litellm_overhead_latency_metric_bucket[1m])) by (le))",
+          "refId": "A",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus"
+          }
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(litellm_overhead_latency_metric_bucket[1m])) by (le))",
+          "refId": "B",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus"
+          }
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(litellm_overhead_latency_metric_bucket[1m])) by (le))",
+          "refId": "C",
+          "legendFormat": "p99",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 22,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "type": "timeseries",
+      "title": "LLM API Latency by Model",
+      "targets": [
+        {
+          "expr": "sum by (requested_model) (rate(litellm_llm_api_latency_metric_sum[1m])) / sum by (requested_model) (rate(litellm_llm_api_latency_metric_count[1m]))",
+          "refId": "A",
+          "legendFormat": "{{requested_model}}",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 24,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "type": "timeseries",
+      "title": "Latency per Output Token by Model",
+      "targets": [
+        {
+          "expr": "sum by (litellm_model_name) (rate(litellm_deployment_latency_per_output_token_sum[1m])) / sum by (litellm_model_name) (rate(litellm_deployment_latency_per_output_token_count[1m]))",
+          "refId": "A",
+          "legendFormat": "{{litellm_model_name}}",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Token Metrics",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      }
+    },
+    {
+      "id": 31,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 33
+      },
+      "type": "timeseries",
+      "title": "Input Tokens/sec",
+      "targets": [
+        {
+          "expr": "sum(rate(litellm_input_tokens_metric_total[1m]))",
+          "refId": "A",
+          "legendFormat": "Input Tokens",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "tps",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 32,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "type": "timeseries",
+      "title": "Output Tokens/sec",
+      "targets": [
+        {
+          "expr": "sum(rate(litellm_output_tokens_metric_total[1m]))",
+          "refId": "A",
+          "legendFormat": "Output Tokens",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "tps",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    }
+  ]
+}

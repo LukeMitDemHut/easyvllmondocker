@@ -1,0 +1,4 @@
+litellm_settings:
+  callbacks: ["prometheus"]
+  
+# Models will be dynamically registered via API

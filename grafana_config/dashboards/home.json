@@ -1,0 +1,722 @@
+{
+  "uid": "home-dashboard",
+  "title": "Home",
+  "tags": ["inference"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "System Overview",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 2,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "type": "stat",
+      "title": "GPU Utilization",
+      "targets": [
+        {
+          "expr": "DCGM_FI_DEV_GPU_UTIL",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "displayName": "GPU ${__field.labels.gpu}",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 70, "color": "yellow" },
+              { "value": 90, "color": "red" }
+            ]
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View System Dashboard",
+          "url": "/d/system-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "type": "stat",
+      "title": "GPU Temperature",
+      "targets": [
+        {
+          "expr": "max(DCGM_FI_DEV_GPU_TEMP)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 70, "color": "yellow" },
+              { "value": 85, "color": "red" }
+            ]
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View System Dashboard",
+          "url": "/d/system-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "type": "stat",
+      "title": "CPU Usage",
+      "targets": [
+        {
+          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 70, "color": "yellow" },
+              { "value": 90, "color": "red" }
+            ]
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View System Dashboard",
+          "url": "/d/system-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "type": "stat",
+      "title": "RAM Usage",
+      "targets": [
+        {
+          "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 80, "color": "yellow" },
+              { "value": 90, "color": "red" }
+            ]
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View System Dashboard",
+          "url": "/d/system-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Gateway (LiteLLM)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      }
+    },
+    {
+      "id": 21,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 6
+      },
+      "type": "stat",
+      "title": "Total Requests/min",
+      "targets": [
+        {
+          "expr": "sum(rate(litellm_proxy_total_requests_metric_total[1m])) * 60",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm",
+          "decimals": 1,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View LiteLLM Dashboard",
+          "url": "/d/litellm-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 6
+      },
+      "type": "stat",
+      "title": "Success Rate",
+      "targets": [
+        {
+          "expr": "(sum(rate(litellm_proxy_total_requests_metric_total{status_code=~\"2..\"}[1m])) / sum(rate(litellm_proxy_total_requests_metric_total[1m]))) * 100",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": 95, "color": "yellow" },
+              { "value": 99, "color": "green" }
+            ]
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View LiteLLM Dashboard",
+          "url": "/d/litellm-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 6
+      },
+      "type": "stat",
+      "title": "Avg Total Latency",
+      "targets": [
+        {
+          "expr": "rate(litellm_request_total_latency_metric_sum[1m]) / rate(litellm_request_total_latency_metric_count[1m])",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 5, "color": "yellow" },
+              { "value": 10, "color": "red" }
+            ]
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View LiteLLM Dashboard",
+          "url": "/d/litellm-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 6
+      },
+      "type": "stat",
+      "title": "Throughput (tokens/s)",
+      "targets": [
+        {
+          "expr": "sum(rate(litellm_output_tokens_metric_total[1m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "tps",
+          "decimals": 1,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View LiteLLM Dashboard",
+          "url": "/d/litellm-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "vLLM Models",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      }
+    },
+    {
+      "id": 31,
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 11
+      },
+      "type": "stat",
+      "title": "Models Loaded",
+      "targets": [
+        {
+          "expr": "count(count by (model_name) (vllm:num_requests_running))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View vLLM Dashboard",
+          "url": "/d/vllm-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 11
+      },
+      "type": "stat",
+      "title": "Total Requests Running",
+      "targets": [
+        {
+          "expr": "sum(vllm:num_requests_running)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 30, "color": "yellow" },
+              { "value": 80, "color": "red" }
+            ]
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View vLLM Dashboard",
+          "url": "/d/vllm-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 11
+      },
+      "type": "stat",
+      "title": "Total Throughput",
+      "targets": [
+        {
+          "expr": "sum(rate(vllm:generation_tokens_total[1m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "tps",
+          "decimals": 1,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View vLLM Dashboard",
+          "url": "/d/vllm-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 11
+      },
+      "type": "stat",
+      "title": "Avg Queue Time",
+      "targets": [
+        {
+          "expr": "sum(rate(vllm:request_queue_time_seconds_sum[1m])) / sum(rate(vllm:request_queue_time_seconds_count[1m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"]
+        },
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "yellow" },
+              { "value": 5, "color": "red" }
+            ]
+          }
+        }
+      },
+      "links": [
+        {
+          "title": "View vLLM Dashboard",
+          "url": "/d/vllm-dashboard"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "type": "table",
+      "title": "Loaded Models",
+      "targets": [
+        {
+          "expr": "vllm:num_requests_running",
+          "refId": "A",
+          "instant": true,
+          "format": "table",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "model_name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 400
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View Model Details",
+                    "url": "/d/vllm-dashboard?var-model_name=${__data.fields.model_name}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Requests Running"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "Time|__name__|instance|job|Hostname|UUID|device|gpu|modelName"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "links": [
+        {
+          "title": "View vLLM Dashboard",
+          "url": "/d/vllm-dashboard"
+        }
+      ]
+    }
+  ]
+}

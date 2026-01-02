@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # Monitor LiteLLM
+  - job_name: 'litellm'
+    static_configs:
+      - targets: ['litellm:4000']
+
+  # Monitor vLLM programmatic targets
+  - job_name: 'vllm-programmatic'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/vllm_targets.json'
+        refresh_interval: 5s
+  
+  # Monitor Node Exporter
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['node_exporter:9100']
+
+  # Monitor DCGM Exporter
+  - job_name: 'dcgm_exporter'
+    static_configs:
+      - targets: ['dcgm_exporter:9400']

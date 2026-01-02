@@ -1,0 +1,375 @@
+{
+  "uid": "vllm-dashboard",
+  "title": "vLLM Metrics",
+  "tags": ["vllm", "inference", "models"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 200,
+      "type": "row",
+      "title": "vLLM Model - $model_name",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "repeat": "model_name",
+      "repeatDirection": "v"
+    },
+    {
+      "id": 201,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "type": "stat",
+      "title": "Requests Running",
+      "targets": [
+        {
+          "expr": "vllm:num_requests_running{model_name=\"$model_name\"}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 10,
+                "color": "yellow"
+              },
+              {
+                "value": 50,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 202,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "type": "stat",
+      "title": "Requests Waiting",
+      "targets": [
+        {
+          "expr": "vllm:num_requests_waiting{model_name=\"$model_name\"}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 5,
+                "color": "yellow"
+              },
+              {
+                "value": 20,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 203,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "type": "gauge",
+      "title": "Active KV Cache Pool Usage",
+      "targets": [
+        {
+          "expr": "vllm:kv_cache_usage_perc{model_name=\"$model_name\"} * 100",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 70,
+                "color": "yellow"
+              },
+              {
+                "value": 90,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 206,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "type": "stat",
+      "title": "Avg Queue Time",
+      "targets": [
+        {
+          "expr": "rate(vllm:request_queue_time_seconds_sum{model_name=\"$model_name\"}[1m]) / rate(vllm:request_queue_time_seconds_count{model_name=\"$model_name\"}[1m])",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "yellow"
+              },
+              {
+                "value": 5,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 204,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
+      "type": "timeseries",
+      "title": "Time to First Token (TTFT)",
+      "targets": [
+        {
+          "expr": "rate(vllm:time_to_first_token_seconds_sum{model_name=\"$model_name\"}[1m]) / rate(vllm:time_to_first_token_seconds_count{model_name=\"$model_name\"}[1m])",
+          "refId": "A",
+          "legendFormat": "Avg TTFT",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 205,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
+      "type": "timeseries",
+      "title": "Time per Output Token (TPOT)",
+      "targets": [
+        {
+          "expr": "rate(vllm:request_time_per_output_token_seconds_sum{model_name=\"$model_name\"}[1m]) / rate(vllm:request_time_per_output_token_seconds_count{model_name=\"$model_name\"}[1m])",
+          "refId": "A",
+          "legendFormat": "Avg TPOT",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 207,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "type": "timeseries",
+      "title": "Generation Throughput (tokens/s)",
+      "targets": [
+        {
+          "expr": "rate(vllm:generation_tokens_total{model_name=\"$model_name\"}[1m])",
+          "refId": "A",
+          "legendFormat": "Tokens/sec",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "tps",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }    
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "model_name",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus"
+        },
+        "query": "label_values(vllm:num_requests_running, model_name)",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false
+      }
+    ]
+  }
+}
