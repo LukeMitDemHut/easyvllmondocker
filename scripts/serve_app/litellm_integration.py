@@ -150,8 +150,9 @@ def add_model_to_litellm(model_name: str, hf_model_name: str, api_key: str, max_
     """
     print(f"Adding model '{model_name}' (HF: {hf_model_name}) to LiteLLM...")
     # Use hosted_vllm provider and actual HF model name
+    # Use hf_model_name as the litellm model_name
     model_payload = {
-        "model_name": model_name,
+        "model_name": hf_model_name,
         "litellm_params": {
             "model": f"hosted_vllm/{hf_model_name}",
             "api_base": f"http://inference-{model_name}:8000/v1",
