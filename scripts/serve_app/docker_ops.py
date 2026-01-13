@@ -6,6 +6,7 @@ import subprocess
 import sys
 import os
 import time
+import re
 from typing import Set, List, Dict, Any, Optional
 
 
@@ -62,7 +63,41 @@ def get_model_container_name(model_name: str) -> str:
     Returns:
         Container name in the format 'inference-{model_name}'
     """
+    
+    # detect illegal characters in model_name
+    if not re.match(r'^[a-zA-Z0-9\-_.\/]+$', model_name):
+        raise ValueError(f"Model name '{model_name}' contains illegal characters. Allowed: a-z, A-Z, 0-9, -, _, ., /")
+    
+    # prohibit double hyphens and double periods
+    if '--' in model_name or '..' in model_name:
+        raise ValueError(f"Model name '{model_name}' contains prohibited sequences. Double hyphens (--) and double periods (..) are not allowed.")
+    
+    # tranlate slashes to double hyphens since HF uses them to separate org/model and docker does not allow slashes in container names
+    model_name = model_name.replace('/', '--')
     return f"inference-{model_name}"
+
+
+def get_model_name_from_container(container_name: str) -> Optional[str]:
+    """
+    Extract the model name from a container name, reversing the transformation.
+    
+    Args:
+        container_name: Name of the container (e.g., 'inference-openai--gpt-oss-120b-0')
+        
+    Returns:
+        Model name with slashes restored (e.g., 'openai/gpt-oss-120b-0'), or None if invalid format
+    """
+    if not container_name.startswith('inference-'):
+        return None
+    
+    # Remove 'inference-' prefix
+    model_name = container_name[len('inference-'):]
+    
+    # Reverse the transformation: double hyphens back to slashes
+    # But only if they're not at the start/end and not triple hyphens
+    model_name = model_name.replace('--', '/')
+    
+    return model_name
 
 
 def ensure_network_exists(network_name: str = "inference_default") -> None:
@@ -132,7 +167,6 @@ def wait_for_container_ready(container_name: str, timeout: int = 500, check_inte
                 
                 # Check for KV cache memory error
                 if 'KV cache is needed, which is larger than the available KV cache memory' in log_output:
-                    import re
                     # Extract suggested max_model_len
                     match = re.search(r'the estimated maximum model length is (\d+)', log_output)
                     if match:

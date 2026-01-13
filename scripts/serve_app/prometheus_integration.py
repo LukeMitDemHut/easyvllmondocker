@@ -63,10 +63,12 @@ def get_prometheus_targets(model_configs: Dict[str, Any]) -> List[Dict[str, Any]
     Returns:
         List of Prometheus target configurations
     """
+    from . import docker_ops
     prometheus_config = []
     for model_name, model_config in model_configs.items():
+        container_name = docker_ops.get_model_container_name(model_name)
         prometheus_config.append({
-            "targets": [f"inference-{model_name}:8000"],
+            "targets": [f"{container_name}:8000"],
             "labels": {
                 "model": model_name,
                 "config": str(model_config)

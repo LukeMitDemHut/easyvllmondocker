@@ -59,11 +59,12 @@ def get_running_vllm_models() -> Set[str]:
         print("Warning: Failed to query running containers", file=sys.stderr)
         return set()
     
-    # Extract model names from container names (remove "inference-" prefix)
+    # Extract model names from container names using the helper function
+    from . import docker_ops
     vllm_models = set()
     for container in containers:
-        if container.startswith('inference-'):
-            model_name = container[len('inference-'):]
+        model_name = docker_ops.get_model_name_from_container(container)
+        if model_name:
             vllm_models.add(model_name)
     
     return vllm_models
@@ -151,11 +152,13 @@ def add_model_to_litellm(model_name: str, hf_model_name: str, api_key: str, max_
     print(f"Adding model '{model_name}' (HF: {hf_model_name}) to LiteLLM...")
     # Use hosted_vllm provider and actual HF model name
     # Use hf_model_name as the litellm model_name
+    from . import docker_ops
+    container_name = docker_ops.get_model_container_name(model_name)
     model_payload = {
         "model_name": hf_model_name,
         "litellm_params": {
             "model": f"hosted_vllm/{hf_model_name}",
-            "api_base": f"http://inference-{model_name}:8000/v1",
+            "api_base": f"http://{container_name}:8000/v1",
             "organization": "inference-vllm"
         }
     }

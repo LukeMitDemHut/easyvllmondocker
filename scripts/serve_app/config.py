@@ -57,9 +57,22 @@ def get_all_model_configs(models: List[Dict[str, Any]]) -> Dict[str, Any]:
         Dictionary mapping model names to their configurations
     """
     all_model_configs = {}
+    all_keys = []
+    
     for model_config in models:
         for model_name, params in model_config.items():
+            all_keys.append(model_name)
             all_model_configs[model_name] = params
+    
+    # Check for duplicate keys
+    if len(all_keys) != len(all_model_configs):
+        duplicate_keys = [key for key in all_keys if all_keys.count(key) > 1]
+        unique_duplicates = list(set(duplicate_keys))
+        print(f"\n⚠️  WARNING: Duplicate model keys detected in configuration!", file=sys.stderr)
+        print(f"    The following keys appear multiple times: {', '.join(unique_duplicates)}", file=sys.stderr)
+        print(f"    YAML only keeps the last occurrence. Each model must have a UNIQUE key.", file=sys.stderr)
+        print(f"    Expected {len(all_keys)} models but only got {len(all_model_configs)}.", file=sys.stderr)
+        print(f"    Use unique suffixes like '-0', '-1', etc. for load-balanced models.\n", file=sys.stderr)
     
     return all_model_configs
 
