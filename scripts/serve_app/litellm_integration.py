@@ -8,7 +8,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Set, Dict, Any, Optional
+from typing import Set, Dict, Any, Optional, List
 
 
 class LiteLLMError(Exception):
@@ -70,7 +70,7 @@ def get_running_vllm_models() -> Set[str]:
     return vllm_models
 
 
-def get_litellm_models(api_key: str, max_retries: int = 10, initial_delay: float = 1.0) -> Dict[str, Dict[str, Any]]:
+def get_litellm_models(api_key: str, max_retries: int = 10, initial_delay: float = 1.0) -> List[Dict[str, Any]]:
     """
     Get currently configured models in LiteLLM via its API.
     Retries if the service is not ready yet.
@@ -81,7 +81,7 @@ def get_litellm_models(api_key: str, max_retries: int = 10, initial_delay: float
         initial_delay: Initial delay between retries in seconds (default: 1.0)
         
     Returns:
-        Dictionary mapping model names to their full model data
+        List of model data dictionaries for models with organization 'inference-vllm'
     """
     delay = initial_delay
     for attempt in range(max_retries):
@@ -104,7 +104,7 @@ def get_litellm_models(api_key: str, max_retries: int = 10, initial_delay: float
                     continue
                 else:
                     print(f"Warning: LiteLLM service error: {response['error']}", file=sys.stderr)
-                    return {}
+                    return []
             
             litellm_models_data = response.get('data', [])
             
@@ -113,7 +113,7 @@ def get_litellm_models(api_key: str, max_retries: int = 10, initial_delay: float
                 model for model in litellm_models_data
                 if model.get('litellm_params', {}).get('organization') == 'inference-vllm'
             ]
-            return {model['model_name']: model for model in managed_models_data}
+            return managed_models_data
             
         except subprocess.CalledProcessError:
             if attempt < max_retries - 1:
@@ -122,17 +122,17 @@ def get_litellm_models(api_key: str, max_retries: int = 10, initial_delay: float
                 delay *= 1.5  # Exponential backoff
             else:
                 print("Warning: Failed to query LiteLLM models after retries", file=sys.stderr)
-                return {}
+                return []
         except json.JSONDecodeError as e:
             if attempt < max_retries - 1:
                 print(f"  LiteLLM not ready yet, retrying in {delay:.1f}s... (attempt {attempt + 1}/{max_retries})")
                 time.sleep(delay)
                 delay *= 1.5  # Exponential backoff
             else:
-                print(f"Warning: Failed to parse LiteLLM models response: {e}", file=sys.stderr)
-                return {}
+                print(f"Warning: Failed to parse LiteLM models response: {e}", file=sys.stderr)
+                return []
     
-    return {}
+    return []
 
 
 def add_model_to_litellm(model_name: str, hf_model_name: str, api_key: str, max_retries: int = 5, initial_delay: float = 1.0) -> bool:
@@ -263,7 +263,7 @@ def update_litellm() -> None:
     print("\nSynchronizing models with LiteLLM gateway...")
     
     # Load model config to get HF model names
-    from . import config
+    from . import config, docker_ops
     try:
         models = config.load_models_config()
         all_model_configs = config.get_all_model_configs(models)
@@ -271,9 +271,12 @@ def update_litellm() -> None:
         print(f"Warning: Failed to load model config: {e}", file=sys.stderr)
         all_model_configs = {}
     
-    # Get running vLLM models
+    # Get running vLLM models (container model names)
     vllm_models = get_running_vllm_models()
-    print(f"Found {len(vllm_models)} vLLM model(s): {', '.join(vllm_models) if vllm_models else 'none'}")
+    print(f"Found {len(vllm_models)} vLLM model(s): {', '.join(sorted(vllm_models)) if vllm_models else 'none'}")
+    
+    # Build expected container names for running models
+    expected_containers = {docker_ops.get_model_container_name(name) for name in vllm_models}
     
     # Get API key
     api_key = get_api_key()
@@ -281,24 +284,40 @@ def update_litellm() -> None:
         print("Warning: LITELLM_MASTER_KEY not found, skipping model sync", file=sys.stderr)
         return
     
-    # Get LiteLLM models
-    litellm_models = get_litellm_models(api_key)
-    print(f"Found {len(litellm_models)} managed LiteLLM model(s): {', '.join(litellm_models.keys()) if litellm_models else 'none'}")
+    # Get LiteLLM models (returns list of all instances)
+    litellm_models_list = get_litellm_models(api_key)
+    print(f"Found {len(litellm_models_list)} managed LiteLLM instance(s)")
+    
+    # Build set of api_base URLs already registered in LiteLLM
+    # Extract container name from api_base URL (e.g., "http://inference-model:8000/v1" -> "inference-model")
+    registered_containers = set()
+    for model_data in litellm_models_list:
+        api_base = model_data.get('litellm_params', {}).get('api_base', '')
+        # Extract container name from URL: http://CONTAINER:8000/v1
+        if api_base.startswith('http://'):
+            container_name = api_base.split('://')[1].split(':')[0]
+            registered_containers.add(container_name)
     
     # Add models present in vLLM containers but missing in LiteLLM
-    models_to_add = vllm_models - set(litellm_models.keys())
+    containers_to_add = expected_containers - registered_containers
+    models_to_add = {docker_ops.get_model_name_from_container(c) for c in containers_to_add if docker_ops.get_model_name_from_container(c)}
     for model_name in models_to_add:
         # Get HF model name from config
         model_config = all_model_configs.get(model_name, {})
         hf_model_name = model_config.get('model', model_name)
         add_model_to_litellm(model_name, hf_model_name, api_key)
     
-    # Remove models present in LiteLLM but missing in vLLM containers
-    models_to_remove = set(litellm_models.keys()) - vllm_models
-    for model_name in models_to_remove:
-        remove_model_from_litellm(model_name, litellm_models[model_name], api_key)
+    # Remove LiteLLM instances whose containers are not running
+    for model_data in litellm_models_list:
+        api_base = model_data.get('litellm_params', {}).get('api_base', '')
+        if api_base.startswith('http://'):
+            container_name = api_base.split('://')[1].split(':')[0]
+            if container_name not in expected_containers:
+                # This instance points to a non-existent container
+                remove_model_from_litellm(container_name, model_data, api_key)
     
-    if not models_to_add and not models_to_remove:
+    stale_containers = registered_containers - expected_containers
+    if not models_to_add and not stale_containers:
         print("✓ Models are in sync")
     else:
-        print(f"✓ Sync complete: {len(models_to_add)} added, {len(models_to_remove)} removed")
+        print(f"✓ Sync complete: {len(models_to_add)} added, {len(stale_containers)} removed")
