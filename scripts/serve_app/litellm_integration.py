@@ -16,15 +16,52 @@ class LiteLLMError(Exception):
     pass
 
 
-def get_litellm_url() -> str:
+def run_litellm_api_call(endpoint: str, api_key: str, method: str = 'GET', data: Optional[str] = None) -> subprocess.CompletedProcess:
     """
-    Get the LiteLLM API URL from environment variables.
+    Make an API call to LiteLLM inside its container using docker exec with Python.
+    
+    Args:
+        endpoint: API endpoint (e.g., '/model/info')
+        api_key: LiteLLM API key
+        method: HTTP method (GET, POST, etc.)
+        data: JSON data for POST requests
     
     Returns:
-        LiteLLM API base URL
+        subprocess.CompletedProcess with the API response
     """
-    port = os.environ.get('GATEWAY_PORT', '8000')
-    return f"http://localhost:{port}"
+    url = f"http://localhost:4000{endpoint}"
+    
+    # Build Python script to make HTTP request
+    python_script = f"""
+import urllib.request
+import json
+import sys
+
+try:
+    headers = {{'Authorization': 'Bearer {api_key}'}}
+    """
+    
+    if data:
+        python_script += f"""
+    data = '''{data}'''
+    headers['Content-Type'] = 'application/json'
+    req = urllib.request.Request('{url}', data=data.encode('utf-8'), headers=headers, method='{method}')
+    """
+    else:
+        python_script += f"""
+    req = urllib.request.Request('{url}', headers=headers, method='{method}')
+    """
+    
+    python_script += """
+    with urllib.request.urlopen(req, timeout=5) as response:
+        print(response.read().decode('utf-8'))
+except Exception as e:
+    print(json.dumps({'error': str(e)}))
+    sys.exit(1)
+"""
+    
+    cmd = ['docker', 'exec', 'litellm', 'python3', '-c', python_script]
+    return subprocess.run(cmd, capture_output=True, text=True, check=True)
 
 
 def ensure_litellm_running() -> bool:
@@ -133,17 +170,10 @@ def get_litellm_models(api_key: str, max_retries: int = 10, initial_delay: float
     # Ensure LiteLLM is running before trying to query it
     ensure_litellm_running()
     
-    litellm_url = get_litellm_url()
     delay = initial_delay
     for attempt in range(max_retries):
         try:
-            result = subprocess.run(
-                ['curl', '-s', '-H', f'Authorization: Bearer {api_key}',
-                 f'{litellm_url}/model/info'],
-                capture_output=True,
-                text=True,
-                check=True
-            )
+            result = run_litellm_api_call('/model/info', api_key)
             response = json.loads(result.stdout)
             
             # Check if we got an error response (service might be starting up)
@@ -202,8 +232,6 @@ def add_model_to_litellm(model_name: str, hf_model_name: str, api_key: str, max_
     """
     print(f"Adding model '{model_name}' (HF: {hf_model_name}) to LiteLLM...")
     
-    litellm_url = get_litellm_url()
-    
     # Use hosted_vllm provider and actual HF model name
     # Use hf_model_name as the litellm model_name
     from . import docker_ops
@@ -220,16 +248,7 @@ def add_model_to_litellm(model_name: str, hf_model_name: str, api_key: str, max_
     delay = initial_delay
     for attempt in range(max_retries):
         try:
-            result = subprocess.run(
-                ['curl', '-s', '-X', 'POST',
-                 '-H', f'Authorization: Bearer {api_key}',
-                 '-H', 'Content-Type: application/json',
-                 '-d', json.dumps(model_payload),
-                 f'{litellm_url}/model/new'],
-                capture_output=True,
-                text=True,
-                check=True
-            )
+            result = run_litellm_api_call('/model/new', api_key, method='POST', data=json.dumps(model_payload))
             response = json.loads(result.stdout)
             if 'error' in response:
                 # Check if it's a transient error
@@ -283,20 +302,10 @@ def remove_model_from_litellm(model_name: str, model_data: Dict[str, Any], api_k
     
     print(f"Removing model '{model_name}' from LiteLLM...")
     
-    litellm_url = get_litellm_url()
     delete_payload = {"id": model_id}
     
     try:
-        result = subprocess.run(
-            ['curl', '-s', '-X', 'POST',
-             '-H', f'Authorization: Bearer {api_key}',
-             '-H', 'Content-Type: application/json',
-             '-d', json.dumps(delete_payload),
-             f'{litellm_url}/model/delete'],
-            capture_output=True,
-            text=True,
-            check=True
-        )
+        result = run_litellm_api_call('/model/delete', api_key, method='POST', data=json.dumps(delete_payload))
         response = json.loads(result.stdout)
         if 'error' in response:
             print(f"  ✗ Error removing model: {response['error']}", file=sys.stderr)
