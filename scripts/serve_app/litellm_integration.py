@@ -16,6 +16,53 @@ class LiteLLMError(Exception):
     pass
 
 
+def get_litellm_url() -> str:
+    """
+    Get the LiteLLM API URL from environment variables.
+    
+    Returns:
+        LiteLLM API base URL
+    """
+    port = os.environ.get('GATEWAY_PORT', '8000')
+    return f"http://localhost:{port}"
+
+
+def ensure_litellm_running() -> bool:
+    """
+    Ensure the LiteLLM container is running, starting it if necessary.
+    
+    Returns:
+        True if LiteLLM is running, False otherwise
+    """
+    from . import config, docker_ops
+    
+    try:
+        # Check if litellm container is running
+        result = subprocess.run(
+            ['docker', 'ps', '--filter', 'name=litellm', '--format', '{{.Names}}'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        if 'litellm' in result.stdout:
+            return True
+        
+        # Container not running, try to start it
+        print("Starting LiteLLM container...")
+        project_root = config.get_project_root()
+        docker_ops.run_docker_compose(['up', '-d', 'litellm'], str(project_root))
+        print("✓ LiteLLM container started")
+        
+        # Give it a moment to initialize
+        time.sleep(2)
+        return True
+        
+    except (subprocess.CalledProcessError, docker_ops.DockerError) as e:
+        print(f"Warning: Failed to ensure LiteLLM is running: {e}", file=sys.stderr)
+        return False
+
+
 def get_api_key() -> Optional[str]:
     """
     Get LITELLM_MASTER_KEY from environment or .env file.
@@ -83,12 +130,16 @@ def get_litellm_models(api_key: str, max_retries: int = 10, initial_delay: float
     Returns:
         List of model data dictionaries for models with organization 'inference-vllm'
     """
+    # Ensure LiteLLM is running before trying to query it
+    ensure_litellm_running()
+    
+    litellm_url = get_litellm_url()
     delay = initial_delay
     for attempt in range(max_retries):
         try:
             result = subprocess.run(
                 ['curl', '-s', '-H', f'Authorization: Bearer {api_key}',
-                 'http://localhost:8000/model/info'],
+                 f'{litellm_url}/model/info'],
                 capture_output=True,
                 text=True,
                 check=True
@@ -150,6 +201,9 @@ def add_model_to_litellm(model_name: str, hf_model_name: str, api_key: str, max_
         True if successful, False otherwise
     """
     print(f"Adding model '{model_name}' (HF: {hf_model_name}) to LiteLLM...")
+    
+    litellm_url = get_litellm_url()
+    
     # Use hosted_vllm provider and actual HF model name
     # Use hf_model_name as the litellm model_name
     from . import docker_ops
@@ -171,7 +225,7 @@ def add_model_to_litellm(model_name: str, hf_model_name: str, api_key: str, max_
                  '-H', f'Authorization: Bearer {api_key}',
                  '-H', 'Content-Type: application/json',
                  '-d', json.dumps(model_payload),
-                 'http://localhost:8000/model/new'],
+                 f'{litellm_url}/model/new'],
                 capture_output=True,
                 text=True,
                 check=True
@@ -228,6 +282,8 @@ def remove_model_from_litellm(model_name: str, model_data: Dict[str, Any], api_k
         return False
     
     print(f"Removing model '{model_name}' from LiteLLM...")
+    
+    litellm_url = get_litellm_url()
     delete_payload = {"id": model_id}
     
     try:
@@ -236,7 +292,7 @@ def remove_model_from_litellm(model_name: str, model_data: Dict[str, Any], api_k
              '-H', f'Authorization: Bearer {api_key}',
              '-H', 'Content-Type: application/json',
              '-d', json.dumps(delete_payload),
-             'http://localhost:8000/model/delete'],
+             f'{litellm_url}/model/delete'],
             capture_output=True,
             text=True,
             check=True
