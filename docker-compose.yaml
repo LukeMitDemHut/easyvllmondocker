@@ -7,7 +7,7 @@ services:
     volumes:
       - ./model_config:/model_config:ro
     working_dir: /model_config
-    entrypoint: ["litellm", "--config", "/model_config/litellm_config.yaml"]
+    entrypoint: ["litellm", "--config", "/model_config/litellm_config.yaml", "--num_workers", "${LITELLM_NUM_WORKERS:-4}"]
 
     environment:
       - DATABASE_URL=postgresql://llm_admin:${POSTGRES_PASSWORD}@postgres:5432/litellm
@@ -17,6 +17,7 @@ services:
       - UI_USERNAME=${LITELLM_USERNAME}
       - UI_PASSWORD=${LITELLM_PASSWORD}
     depends_on: [postgres]
+#    cpuset: "8-11"
 
   postgres:
     image: postgres:16-alpine
@@ -27,6 +28,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    cpuset: "12-15"
 
   # --- PROMETHEUS ---
   prometheus:
@@ -39,6 +41,7 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
     restart: unless-stopped
+#    cpuset: "12-15"
 
   node_exporter:
     image: quay.io/prometheus/node-exporter:latest
@@ -49,6 +52,7 @@ services:
     restart: unless-stopped
     volumes:
       - "/:/host:ro,rslave"
+#    cpuset: "12-15"
 
   dcgm_exporter:
     image: nvidia/dcgm-exporter:latest
@@ -57,6 +61,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     restart: unless-stopped
+#    cpuset: "12-15"
 
   # --- GRAFANA ---
   grafana:
@@ -75,6 +80,7 @@ services:
     depends_on:
       - prometheus
     restart: unless-stopped
+#    cpuset: "12-15"
 
 networks:
   default:

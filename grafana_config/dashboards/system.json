@@ -312,11 +312,48 @@
       }
     },
     {
-      "id": 10,
+      "id": 14,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
+        "y": 16
+      },
+      "type": "timeseries",
+      "title": "CPU Threads Usage",
+      "targets": [
+        {
+          "expr": "100 - (rate(node_cpu_seconds_total{mode=\"idle\"}[1m]) * 100)",
+          "refId": "A",
+          "legendFormat": "CPU {{cpu}}",
+          "datasource": {
+            "type": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
         "y": 16
       },
       "type": "timeseries",
@@ -369,8 +406,8 @@
       "gridPos": {
         "h": 8,
         "w": 8,
-        "x": 16,
-        "y": 16
+        "x": 0,
+        "y": 24
       },
       "type": "timeseries",
       "title": "System RAM Usage",
@@ -413,7 +450,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
+        "x": 8,
         "y": 24
       },
       "type": "timeseries",
@@ -457,8 +494,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 24
+        "x": 0,
+        "y": 32
       },
       "type": "timeseries",
       "title": "Filesystem Usage",
@@ -511,7 +548,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
+        "x": 12,
         "y": 32
       },
       "type": "timeseries",
@@ -555,8 +592,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 32
+        "x": 0,
+        "y": 40
       },
       "type": "timeseries",
       "title": "NVLink Bandwidth",

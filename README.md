@@ -194,10 +194,11 @@ See [CLI Reference](#cli-reference) for detailed usage.
 
 #### Optional Variables
 
-| Variable            | Description           | Default                |
-| ------------------- | --------------------- | ---------------------- |
-| `GATEWAY_PORT`      | LiteLLM gateway port  | `8000`                 |
-| `HUGGINGFACE_CACHE` | Model cache directory | `~/.cache/huggingface` |
+| Variable               | Description                      | Default                |
+| ---------------------- | -------------------------------- | ---------------------- |
+| `GATEWAY_PORT`         | LiteLLM gateway port             | `8000`                 |
+| `HUGGINGFACE_CACHE`    | Model cache directory            | `~/.cache/huggingface` |
+| `LITELLM_NUM_WORKERS`  | Number of LiteLLM worker threads | `4`                    |
 
 ### Model Configuration Reference
 
@@ -226,6 +227,7 @@ models:
 | Parameter                | Description                          | Default  | Notes                              |
 | ------------------------ | ------------------------------------ | -------- | ---------------------------------- |
 | `gpus`                   | List of GPU IDs to use               | All GPUs | `[0]` or `[0, 1]`                  |
+| `cpuset-cpus`            | CPU cores to pin container to        | None     | `"0-3"` or `[0, 1, 2, 3]`         |
 | `tensor-parallel-size`   | Number of GPUs to shard model across | `1`      | Must match GPU count               |
 | `gpu-memory-utilization` | Fraction of GPU memory to use        | `0.9`    | Reduce for multiple models         |
 | `max-model-len`          | Maximum sequence length              | Auto     | Override context window            |
@@ -233,8 +235,22 @@ models:
 | `quantization`           | Quantization method                  | `None`   | `awq`, `gptq`, `squeezellm`, `fp8` |
 | `max-num-seqs`           | Maximum sequences per iteration      | `256`    | Reduce for lower memory            |
 | `enable-prefix-caching`  | Enable prefix caching                | `true`   | Improves repeated prompts          |
+| `additional_flags`       | List of extra CLI flags              | None     | See example below                  |
 
 All vLLM parameters supported. Use underscores (converted to hyphens automatically).
+
+#### Using `additional_flags`
+
+For flags that don't require values (boolean flags), use `additional_flags`:
+
+```yaml
+models:
+  - custom-model:
+      model: org/model-name
+      additional_flags:
+        - --trust-remote-code
+        - --disable-log-stats
+```
 
 #### Multi-Model GPU Strategies
 

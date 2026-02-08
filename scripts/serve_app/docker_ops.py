@@ -129,13 +129,13 @@ def ensure_network_exists(network_name: str = "inference_default") -> None:
             raise DockerError(f"Error creating network: {e}")
 
 
-def wait_for_container_ready(container_name: str, timeout: int = 500, check_interval: int = 5) -> bool:
+def wait_for_container_ready(container_name: str, timeout: int = None, check_interval: int = 5) -> bool:
     """
     Wait for container to be healthy by checking logs for startup completion.
     
     Args:
         container_name: Name of the container to monitor
-        timeout: Maximum time to wait in seconds
+        timeout: Maximum time to wait in seconds (None for no timeout)
         check_interval: How often to check in seconds
         
     Returns:
@@ -144,7 +144,7 @@ def wait_for_container_ready(container_name: str, timeout: int = 500, check_inte
     print(f"Waiting for {container_name} to be ready...", end='', flush=True)
     start_time = time.time()
     
-    while time.time() - start_time < timeout:
+    while timeout is None or time.time() - start_time < timeout:
         try:
             # Check if container is still running
             result = subprocess.run(
@@ -208,7 +208,8 @@ def wait_for_container_ready(container_name: str, timeout: int = 500, check_inte
             print(f"\n✗ Error checking container: {e}")
             return False
     
-    print(f"\n✗ Timeout after {timeout}s")
+    if timeout is not None:
+        print(f"\n✗ Timeout after {timeout}s")
     return False
 
 
@@ -295,6 +296,7 @@ def start_container(
     
     model_id = flat_params.get('model', model_name)
     gpus = flat_params.get('gpus', None)  # List of GPU IDs or None for all
+    cpuset_cpus = flat_params.get('cpuset-cpus', None)  # List of CPU IDs or string
     
     # Build docker run command
     cmd = [
@@ -315,6 +317,16 @@ def start_container(
     else:
         # Fallback to all GPUs
         cmd.extend(['--gpus', 'all'])
+    
+    # Configure CPU pinning
+    if cpuset_cpus is not None:
+        if isinstance(cpuset_cpus, list) and len(cpuset_cpus) > 0:
+            # Convert list to comma-separated string
+            cpu_list = ','.join(str(cpu) for cpu in cpuset_cpus)
+            cmd.extend(['--cpuset-cpus', cpu_list])
+        elif isinstance(cpuset_cpus, str):
+            # Use string format directly (e.g., "0-5" or "0,1,2,3,4,5")
+            cmd.extend(['--cpuset-cpus', cpuset_cpus])
     
     # Continue with rest of docker run options
     cmd.extend([
@@ -339,10 +351,16 @@ def start_container(
     
     # Add all other parameters as vLLM flags
     for key, value in flat_params.items():
-        if key not in ['model', 'gpus']:
+        if key not in ['model', 'gpus', 'cpuset-cpus', 'additional_flags']:
             # Convert underscores to hyphens for command-line flags
             flag_name = key.replace('_', '-')
             cmd.extend([f'--{flag_name}', str(value)])
+    
+    # Add additional flags (for flags without values like --trust-remote-code)
+    if 'additional_flags' in flat_params:
+        additional_flags = flat_params['additional_flags']
+        if isinstance(additional_flags, list):
+            cmd.extend(additional_flags)
     
     print(f"Running: {' '.join(cmd)}")
     

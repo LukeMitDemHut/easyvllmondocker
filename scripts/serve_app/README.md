@@ -35,6 +35,11 @@ scripts/
 - Container status checking and monitoring
 - Network management
 - Container health checking and readiness waiting
+- Supports advanced configuration:
+  - GPU selection via `gpus` parameter
+  - CPU pinning via `cpuset-cpus` parameter
+  - Additional CLI flags via `additional_flags` list
+  - Automatic parameter conversion (underscores to hyphens)
 
 ### `container_manager.py` - Container Management
 - High-level orchestration of container lifecycle
