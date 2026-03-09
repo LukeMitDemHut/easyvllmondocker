@@ -297,6 +297,7 @@ def start_container(
     model_id = flat_params.get('model', model_name)
     gpus = flat_params.get('gpus', None)  # List of GPU IDs or None for all
     cpuset_cpus = flat_params.get('cpuset-cpus', None)  # List of CPU IDs or string
+    shm_size = flat_params.get('shm-size', None)  # Shared memory size (e.g., '8g', '512m')
     
     # Build docker run command
     cmd = [
@@ -328,6 +329,10 @@ def start_container(
             # Use string format directly (e.g., "0-5" or "0,1,2,3,4,5")
             cmd.extend(['--cpuset-cpus', cpuset_cpus])
     
+    # Configure shared memory size
+    if shm_size is not None:
+        cmd.extend(['--shm-size', str(shm_size)])
+    
     # Continue with rest of docker run options
     cmd.extend([
         '--ipc', 'host',
@@ -351,7 +356,7 @@ def start_container(
     
     # Add all other parameters as vLLM flags
     for key, value in flat_params.items():
-        if key not in ['model', 'gpus', 'cpuset-cpus', 'additional_flags']:
+        if key not in ['model', 'gpus', 'cpuset-cpus', 'shm-size', 'additional_flags']:
             # Convert underscores to hyphens for command-line flags
             flag_name = key.replace('_', '-')
             cmd.extend([f'--{flag_name}', str(value)])

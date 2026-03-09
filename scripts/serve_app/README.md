@@ -38,6 +38,7 @@ scripts/
 - Supports advanced configuration:
   - GPU selection via `gpus` parameter
   - CPU pinning via `cpuset-cpus` parameter
+  - Shared memory size via `shm-size` parameter
   - Additional CLI flags via `additional_flags` list
   - Automatic parameter conversion (underscores to hyphens)
 

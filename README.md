@@ -228,6 +228,7 @@ models:
 | ------------------------ | ------------------------------------ | -------- | ---------------------------------- |
 | `gpus`                   | List of GPU IDs to use               | All GPUs | `[0]` or `[0, 1]`                  |
 | `cpuset-cpus`            | CPU cores to pin container to        | None     | `"0-3"` or `[0, 1, 2, 3]`         |
+| `shm-size`               | Shared memory size for container     | 64m      | `"8g"`, `"512m"` (needed for TP)  |
 | `tensor-parallel-size`   | Number of GPUs to shard model across | `1`      | Must match GPU count               |
 | `gpu-memory-utilization` | Fraction of GPU memory to use        | `0.9`    | Reduce for multiple models         |
 | `max-model-len`          | Maximum sequence length              | Auto     | Override context window            |
@@ -289,6 +290,7 @@ models:
 - Use dedicated GPUs when possible to avoid memory conflicts
 - Match `tensor-parallel-size` to GPU count in `gpus` list
 - For shared GPUs, ensure sum of `gpu-memory-utilization` < 0.9 per GPU
+- **Set `shm-size` for tensor-parallel models**: Use `8g` or higher for multi-GPU setups to avoid shared memory errors
 - Monitor with `nvidia-smi`
 
 ---
@@ -531,6 +533,15 @@ nvidia-smi
         max-model-len: 51216 # Use the suggested value from error message
         gpu-memory-utilization: 0.90
   ```
+- **Shared memory error** (`RuntimeError: cancelled` in multiprocessing, `EngineDeadError`): The container's shared memory (`/dev/shm`) is exhausted, especially common with tensor-parallel models. Add `shm-size` to your model config:
+  ```yaml
+  models:
+    - your-model:
+        model: org/model-name
+        shm-size: 8g  # 8GB recommended for tensor-parallel models
+        tensor-parallel-size: 2
+  ```
+  **Why this happens**: vLLM uses shared memory for inter-process communication between GPU workers. The default Docker shared memory size (64MB) is insufficient for multi-GPU setups. Use 8GB or higher for tensor-parallel deployments.
 
 ### LiteLLM Connection Issues
 

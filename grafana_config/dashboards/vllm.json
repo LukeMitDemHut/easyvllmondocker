@@ -85,7 +85,7 @@
         "x": 6,
         "y": 1
       },
-      "type": "stat",
+      "type": "timeseries",
       "title": "Requests Waiting",
       "targets": [
         {
@@ -198,7 +198,7 @@
         "x": 18,
         "y": 1
       },
-      "type": "stat",
+      "type": "timeseries",
       "title": "Avg Queue Time",
       "targets": [
         {

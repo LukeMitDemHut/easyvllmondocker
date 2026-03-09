@@ -1,4 +1,20 @@
 litellm_settings:
   callbacks: ["prometheus"]
+  # log_raw_request_response: True
+  drop_params: false  # Allow dropping unsupported params
+  modify_params: false  # Allow modifying request params
+  
+general_settings:
+  # store_model_in_db: true
+  #vstore_prompts_in_spend_logs: true
+  allowed_fails: 0  # Don't mark as unhealthy on validation errors
+  
+router_settings:
+  model_group_retry_policy:
+    - key: "MiniMaxAI/MiniMax-M2.1"
+      retry_strategy: "least_busy"
+      num_retries: 0
+  enable_pre_call_checks: false
+  routing_strategy: "simple-shuffle"  # Distribute load evenly
   
 # Models will be dynamically registered via API
