@@ -4,8 +4,14 @@ Configuration module for loading and managing model configurations.
 
 import yaml
 import sys
+import os
 from pathlib import Path
 from typing import List, Dict, Any
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 
 
 class ConfigurationError(Exception):
@@ -112,3 +118,24 @@ def get_project_root() -> Path:
         Path to the project root (parent of scripts directory)
     """
     return Path(__file__).parent.parent.parent
+
+
+def load_env() -> None:
+    """
+    Load environment variables from .env file in the project root.
+    This function should be called early in the CLI to ensure all environment
+    variables are available for subsequent operations.
+    
+    If python-dotenv is not installed, this is a no-op.
+    """
+    if load_dotenv is None:
+        return
+    
+    env_file = get_project_root() / '.env'
+    if env_file.exists():
+        load_dotenv(env_file)
+    else:
+        # Try .env.example as fallback (for reference)
+        env_example = get_project_root() / '.env.example'
+        if env_example.exists():
+            load_dotenv(env_example)

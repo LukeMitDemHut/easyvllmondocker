@@ -172,6 +172,9 @@ def main() -> None:
     """
     Main entry point for the CLI application.
     """
+    # Load environment variables from .env file
+    config.load_env()
+    
     args = parse_arguments()
     command, model_names = resolve_command_and_models(args)
     

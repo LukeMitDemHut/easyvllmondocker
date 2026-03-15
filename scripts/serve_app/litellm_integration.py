@@ -102,26 +102,15 @@ def ensure_litellm_running() -> bool:
 
 def get_api_key() -> Optional[str]:
     """
-    Get LITELLM_MASTER_KEY from environment or .env file.
+    Get LITELLM_MASTER_KEY from environment.
+    
+    Note: Environment variables are loaded from .env file by config.load_env()
+    which is called early in the CLI initialization.
     
     Returns:
         API key if found, None otherwise
     """
-    # Try environment first
-    api_key = os.environ.get('LITELLM_MASTER_KEY')
-    if api_key:
-        return api_key
-    
-    # Try .env file
-    from . import config
-    env_file = config.get_project_root() / '.env'
-    if env_file.exists():
-        with open(env_file, 'r') as f:
-            for line in f:
-                if line.startswith('LITELLM_MASTER_KEY='):
-                    return line.split('=', 1)[1].strip()
-    
-    return None
+    return os.environ.get('LITELLM_MASTER_KEY')
 
 
 def get_running_vllm_models() -> Set[str]:
