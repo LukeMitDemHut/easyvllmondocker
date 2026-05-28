@@ -28,24 +28,30 @@ This project provides a **batteries-included, single-machine LLM inference solut
 
 ### Hardware
 
-- NVIDIA GPU(s) with sufficient VRAM (H200, H100, A100, or similar)
-- NVIDIA drivers and Fabric Manager installed ([Cuda Installation Guide](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/))
+- NVIDIA GPU(s) with sufficient memory
+  - x86 servers: H200, H100, A100, or similar datacenter GPUs
+  - DGX Spark: NVIDIA Grace Blackwell / ARM64 system with unified memory
+- NVIDIA drivers installed
+  - x86 servers: install the normal NVIDIA driver stack; Fabric Manager may be required on HGX/DGX systems with NVSwitch
+  - DGX Spark: use the bundled DGX OS driver/runtime stack
 
 ### Software
 
 - Docker Engine 20.10+ ([Installation Guide](https://docs.docker.com/engine/install/))
 - Docker Compose 2.0+ ([Installation Guide](https://docs.docker.com/compose/install/))
 - NVIDIA Container Toolkit ([Installation Guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html))
-  - **Important**: After installing NVIDIA Container Toolkit, configure and restart Docker:
+  - x86 servers: after installing NVIDIA Container Toolkit, configure and restart Docker:
     ```bash
     sudo nvidia-ctk runtime configure --runtime=docker
     sudo systemctl restart docker
     ```
+  - DGX Spark: NVIDIA Container Runtime for Docker is included with DGX OS and should work out of the box
 - Python 3.8+ with pip and venv (for CLI tool)
 
 ### Accounts
 
 - HuggingFace account with API token (for model downloads)
+- NGC account/API key if you need to pull `nvcr.io` images such as the DCGM exporter
 
 ## ⚡ Quick Start
 
@@ -84,6 +90,22 @@ GRAFANA_ADMIN_PASSWORD=your_secure_password
 ```
 
 See [Environment Variables Reference](#environment-variables-reference) for all options.
+
+#### DGX Spark Notes
+
+DGX Spark is an ARM64 Grace Blackwell system. Docker normally selects ARM64 images automatically, but if it does not, set:
+
+```bash
+VLLM_PLATFORM=linux/arm64
+```
+
+The monitoring stack uses NVIDIA's NGC DCGM exporter image by default. If your DGX Spark is already running host `nv-hostengine`, you can have the exporter connect to that host service instead of starting its embedded engine:
+
+```bash
+DCGM_REMOTE_HOSTENGINE_INFO=host.docker.internal:5555
+```
+
+Leave `DCGM_REMOTE_HOSTENGINE_INFO` empty for embedded exporter mode. When using hostengine passthrough, check `nv-hostengine --version` on the host and keep `DCGM_EXPORTER_IMAGE` at a DCGM version greater than or equal to the host version.
 
 ### 3. Configure Models
 
@@ -194,11 +216,37 @@ See [CLI Reference](#cli-reference) for detailed usage.
 
 #### Optional Variables
 
-| Variable               | Description                      | Default                |
-| ---------------------- | -------------------------------- | ---------------------- |
-| `GATEWAY_PORT`         | LiteLLM gateway port             | `8000`                 |
-| `HUGGINGFACE_CACHE`    | Model cache directory            | `~/.cache/huggingface` |
-| `LITELLM_NUM_WORKERS`  | Number of LiteLLM worker threads | `4`                    |
+| Variable               | Description                                    | Default                |
+| ---------------------- | ---------------------------------------------- | ---------------------- |
+| `GATEWAY_PORT`         | LiteLLM gateway port                           | `8000`                 |
+| `HUGGINGFACE_CACHE`    | Model cache directory                          | `~/.cache/huggingface` |
+| `LITELLM_NUM_WORKERS`  | Number of LiteLLM worker threads               | `4`                    |
+| `VLLM_IMAGE`           | vLLM OpenAI-compatible server image            | `vllm/vllm-openai:v0.20.2-cu129` |
+| `VLLM_PLATFORM`        | Optional Docker platform for vLLM containers   | Empty                  |
+
+#### Image and Platform Configuration
+
+All infrastructure images are configurable through `.env` so x86 and DGX Spark deployments can use explicit, tested tags.
+
+| Variable                 | Description                       | Default |
+| ------------------------ | --------------------------------- | ------- |
+| `LITELLM_IMAGE`          | LiteLLM gateway image             | `ghcr.io/berriai/litellm:litellm_stable_v1_82_3-v1.82.3` |
+| `POSTGRES_IMAGE`         | PostgreSQL image                  | `postgres:16-alpine` |
+| `PROMETHEUS_IMAGE`       | Prometheus image                  | `prom/prometheus:v3.12.0` |
+| `NODE_EXPORTER_IMAGE`    | Node Exporter image               | `quay.io/prometheus/node-exporter:v1.11.1` |
+| `DCGM_EXPORTER_IMAGE`    | NVIDIA DCGM Exporter image        | `nvcr.io/nvidia/k8s/dcgm-exporter:4.4.1-4.6.0-ubuntu22.04` |
+| `GRAFANA_IMAGE`          | Grafana image                     | `grafana/grafana:13.0.1` |
+| `DCGM_REMOTE_HOSTENGINE_INFO` | Optional remote `nv-hostengine` endpoint | Empty |
+| `DCGM_EXPORTER_DEVICES_STR` | DCGM device selector           | `f` |
+| `DCGM_EXPORTER_INTERVAL` | DCGM scrape interval in milliseconds | `30000` |
+
+For DGX Spark, log in to NGC before starting services if Docker cannot pull `nvcr.io` images:
+
+```bash
+docker login nvcr.io
+# Username: $oauthtoken
+# Password: <your-ngc-api-key>
+```
 
 ### Model Configuration Reference
 
@@ -525,6 +573,7 @@ nvidia-smi
 - Out of GPU memory: Reduce `gpu-memory-utilization` in models.yaml
 - Model download failed: Check `HF_TOKEN` is set correctly
 - Container exits immediately: Check logs for configuration errors
+- `no matching manifest for linux/arm64`: The selected image does not publish a native DGX Spark/ARM64 build. Use an ARM64-capable tag in `VLLM_IMAGE` or leave `VLLM_PLATFORM` empty if Docker is already selecting the correct host architecture.
 - **KV cache memory error** (`ValueError: To serve at least one request...`): The model's default context length is too large for available GPU memory. Add `max-model-len` to your model config to reduce context window:
   ```yaml
   models:
@@ -564,6 +613,7 @@ curl -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
 - "LiteLLM not ready yet": Normal during startup, CLI will retry automatically
 - "LITELLM_MASTER_KEY not found": Set in `.env` and restart services
 - Models not registered: Check container logs and network connectivity
+- NGC auth failures: Run `docker login nvcr.io` if Docker cannot pull `nvcr.io` images such as the DCGM exporter
 
 ### Prometheus/Grafana Issues
 
@@ -583,6 +633,19 @@ docker-compose restart prometheus grafana
 - Check Prometheus is scraping targets successfully
 - Verify datasource configuration in Grafana
 - Check time range in dashboard (default: last 5 minutes)
+
+**DCGM/GPU metrics missing:**
+
+```bash
+docker logs dcgm_exporter
+curl http://localhost:9400/metrics
+```
+
+- If the DCGM exporter image cannot be pulled, run `docker login nvcr.io` and retry `docker compose up -d dcgm_exporter`
+- On DGX Spark with host `nv-hostengine`, set `DCGM_REMOTE_HOSTENGINE_INFO=host.docker.internal:5555`
+- If using hostengine passthrough, compare `nv-hostengine --version` on the host with `DCGM_EXPORTER_IMAGE`; the exporter DCGM version should be greater than or equal to the host version
+- If `DCGM_REMOTE_HOSTENGINE_INFO` is empty, the exporter uses embedded mode
+- Check http://localhost:9090/targets and verify the `dcgm_exporter` target is `UP`
 
 ### Performance Issues
 

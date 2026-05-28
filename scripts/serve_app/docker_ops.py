@@ -298,6 +298,8 @@ def start_container(
     gpus = flat_params.get('gpus', None)  # List of GPU IDs or None for all
     cpuset_cpus = flat_params.get('cpuset-cpus', None)  # List of CPU IDs or string
     shm_size = flat_params.get('shm-size', None)  # Shared memory size (e.g., '8g', '512m')
+    vllm_image = os.environ.get('VLLM_IMAGE', 'vllm/vllm-openai:v0.20.2-cu129')
+    vllm_platform = os.environ.get('VLLM_PLATFORM')
     
     # Build docker run command
     cmd = [
@@ -314,7 +316,7 @@ def start_container(
     elif isinstance(gpus, list) and len(gpus) > 0:
         # Use specific GPU(s)
         gpu_list = ','.join(str(gpu) for gpu in gpus)
-        cmd.extend(['--gpus', f'"device={gpu_list}"'])
+        cmd.extend(['--gpus', f'device={gpu_list}'])
     else:
         # Fallback to all GPUs
         cmd.extend(['--gpus', 'all'])
@@ -345,10 +347,13 @@ def start_container(
     # Add HF_TOKEN if available
     if 'HF_TOKEN' in os.environ:
         cmd.extend(['-e', f'HF_TOKEN={os.environ["HF_TOKEN"]}'])
+
+    if vllm_platform:
+        cmd.extend(['--platform', vllm_platform])
     
     # Add image and vllm command
     cmd.extend([
-        'vllm/vllm-openai:latest',
+        vllm_image,
         model_id,
         '--port', str(port),
         '--host', '0.0.0.0'

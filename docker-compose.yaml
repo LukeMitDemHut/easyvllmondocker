@@ -1,7 +1,7 @@
 services:
   # --- GATEWAY ---
   litellm:
-    image: ghcr.io/berriai/litellm:litellm_stable_v1_82_3-v1.82.3
+    image: ${LITELLM_IMAGE:-ghcr.io/berriai/litellm:litellm_stable_v1_82_3-v1.82.3}
     ports: ["${GATEWAY_PORT:-8000}:4000"]
     container_name: litellm
     volumes:
@@ -19,7 +19,7 @@ services:
     depends_on: [postgres]
 
   postgres:
-    image: postgres:16-alpine
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     container_name: postgres
     environment:
       - POSTGRES_DB=litellm
@@ -30,7 +30,7 @@ services:
 
   # --- PROMETHEUS ---
   prometheus:
-    image: prom/prometheus:latest
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.12.0}
     container_name: prometheus
     volumes:
       - ./prometheus_config/prometheus.yml:/etc/prometheus/prometheus.yml
@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
 
   node_exporter:
-    image: quay.io/prometheus/node-exporter:latest
+    image: ${NODE_EXPORTER_IMAGE:-quay.io/prometheus/node-exporter:v1.11.1}
     container_name: node_exporter
     command:
       - "--path.rootfs=/host"
@@ -51,16 +51,24 @@ services:
       - "/:/host:ro,rslave"
 
   dcgm_exporter:
-    image: nvidia/dcgm-exporter:latest
+    image: ${DCGM_EXPORTER_IMAGE:-nvcr.io/nvidia/k8s/dcgm-exporter:4.4.1-4.6.0-ubuntu22.04}
     container_name: dcgm_exporter
     runtime: nvidia
+    gpus: all
+    cap_add:
+      - SYS_ADMIN
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
+      - DCGM_REMOTE_HOSTENGINE_INFO=${DCGM_REMOTE_HOSTENGINE_INFO:-}
+      - DCGM_EXPORTER_DEVICES_STR=${DCGM_EXPORTER_DEVICES_STR:-f}
+      - DCGM_EXPORTER_INTERVAL=${DCGM_EXPORTER_INTERVAL:-30000}
     restart: unless-stopped
 
   # --- GRAFANA ---
   grafana:
-    image: grafana/grafana:latest
+    image: ${GRAFANA_IMAGE:-grafana/grafana:13.0.1}
     container_name: grafana
     ports:
       - "3000:3000"
