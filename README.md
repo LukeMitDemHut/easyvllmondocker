@@ -105,7 +105,7 @@ The monitoring stack uses NVIDIA's NGC DCGM exporter image by default. If your D
 DCGM_REMOTE_HOSTENGINE_INFO=host.docker.internal:5555
 ```
 
-Leave `DCGM_REMOTE_HOSTENGINE_INFO` empty for embedded exporter mode. When using hostengine passthrough, check `nv-hostengine --version` on the host and keep `DCGM_EXPORTER_IMAGE` at a DCGM version greater than or equal to the host version.
+Leave `DCGM_REMOTE_HOSTENGINE_INFO` empty for embedded exporter mode. The compose file unsets blank values before starting dcgm-exporter because dcgm-exporter treats a present-but-empty remote hostengine value as remote mode with an invalid empty address. When using hostengine passthrough, check `nv-hostengine --version` on the host and keep `DCGM_EXPORTER_IMAGE` at a DCGM version greater than or equal to the host version.
 
 ### 3. Configure Models
 
@@ -573,6 +573,7 @@ nvidia-smi
 - Out of GPU memory: Reduce `gpu-memory-utilization` in models.yaml
 - Model download failed: Check `HF_TOKEN` is set correctly
 - Container exits immediately: Check logs for configuration errors
+- No loading dots and no model container yet: the CLI is still pulling `VLLM_IMAGE`; wait for the visible `docker pull` progress to finish before readiness checks begin
 - `no matching manifest for linux/arm64`: The selected image does not publish a native DGX Spark/ARM64 build. Use an ARM64-capable tag in `VLLM_IMAGE` or leave `VLLM_PLATFORM` empty if Docker is already selecting the correct host architecture.
 - **KV cache memory error** (`ValueError: To serve at least one request...`): The model's default context length is too large for available GPU memory. Add `max-model-len` to your model config to reduce context window:
   ```yaml
@@ -614,6 +615,15 @@ curl -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
 - "LITELLM_MASTER_KEY not found": Set in `.env` and restart services
 - Models not registered: Check container logs and network connectivity
 - NGC auth failures: Run `docker login nvcr.io` if Docker cannot pull `nvcr.io` images such as the DCGM exporter
+- Prisma/httpx connection errors during LiteLLM startup usually mean Postgres was not ready yet. The compose file waits for Postgres health before starting LiteLLM; recreate both services if you updated from an older compose file:
+  ```bash
+  docker compose up -d --force-recreate postgres litellm
+  ```
+- If you changed database env vars such as `POSTGRES_PASSWORD`, the existing Postgres volume may still contain a database initialized with the old credentials. If you can discard the LiteLLM database state, remove the stack with volumes and recreate it:
+  ```bash
+  docker compose down -v
+  docker compose up -d
+  ```
 
 ### Prometheus/Grafana Issues
 
@@ -644,7 +654,7 @@ curl http://localhost:9400/metrics
 - If the DCGM exporter image cannot be pulled, run `docker login nvcr.io` and retry `docker compose up -d dcgm_exporter`
 - On DGX Spark with host `nv-hostengine`, set `DCGM_REMOTE_HOSTENGINE_INFO=host.docker.internal:5555`
 - If using hostengine passthrough, compare `nv-hostengine --version` on the host with `DCGM_EXPORTER_IMAGE`; the exporter DCGM version should be greater than or equal to the host version
-- If `DCGM_REMOTE_HOSTENGINE_INFO` is empty, the exporter uses embedded mode
+- If `DCGM_REMOTE_HOSTENGINE_INFO` is empty, the compose startup wrapper unsets it and the exporter uses embedded mode
 - Check http://localhost:9090/targets and verify the `dcgm_exporter` target is `UP`
 
 ### Performance Issues

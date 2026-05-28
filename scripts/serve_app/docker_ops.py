@@ -7,12 +7,26 @@ import sys
 import os
 import time
 import re
+import shlex
 from typing import Set, List, Dict, Any, Optional
 
 
 class DockerError(Exception):
     """Raised when a Docker operation fails."""
     pass
+
+
+def _redact_command(cmd: List[str]) -> str:
+    """
+    Format a command for display while hiding sensitive environment values.
+    """
+    redacted = []
+    for token in cmd:
+        if token.startswith('HF_TOKEN='):
+            redacted.append('HF_TOKEN=<redacted>')
+        else:
+            redacted.append(token)
+    return shlex.join(redacted)
 
 
 def get_existing_containers() -> Set[str]:
@@ -350,6 +364,18 @@ def start_container(
 
     if vllm_platform:
         cmd.extend(['--platform', vllm_platform])
+
+    # Pull explicitly so users see progress before the detached container exists.
+    pull_cmd = ['docker', 'pull']
+    if vllm_platform:
+        pull_cmd.extend(['--platform', vllm_platform])
+    pull_cmd.append(vllm_image)
+    print(f"Pulling image: {_redact_command(pull_cmd)}")
+    try:
+        subprocess.run(pull_cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error pulling vLLM image {vllm_image}: {e}", file=sys.stderr)
+        return False
     
     # Add image and vllm command
     cmd.extend([
@@ -372,7 +398,7 @@ def start_container(
         if isinstance(additional_flags, list):
             cmd.extend(additional_flags)
     
-    print(f"Running: {' '.join(cmd)}")
+    print(f"Running: {_redact_command(cmd)}")
     
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
