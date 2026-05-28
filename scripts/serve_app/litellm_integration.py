@@ -310,7 +310,7 @@ def remove_model_from_litellm(model_name: str, model_data: Dict[str, Any], api_k
         return False
 
 
-def update_litellm() -> None:
+def update_litellm(model_config_path: str = "model_config/models.yaml") -> None:
     """
     Update LiteLLM gateway configuration to sync with running vLLM containers.
     """
@@ -319,7 +319,7 @@ def update_litellm() -> None:
     # Load model config to get HF model names
     from . import config, docker_ops
     try:
-        models = config.load_models_config()
+        models = config.load_models_config(model_config_path)
         all_model_configs = config.get_all_model_configs(models)
     except config.ConfigurationError as e:
         print(f"Warning: Failed to load model config: {e}", file=sys.stderr)

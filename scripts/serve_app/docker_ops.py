@@ -29,6 +29,14 @@ def _redact_command(cmd: List[str]) -> str:
     return shlex.join(redacted)
 
 
+def print_container_logs_hint(container_name: str) -> None:
+    """
+    Print a ready-to-run command for investigating container startup issues.
+    """
+    print("    Inspect the container logs with:")
+    print(f"    docker logs {shlex.quote(container_name)}")
+
+
 def get_existing_containers() -> Set[str]:
     """
     Get list of existing inference containers.
@@ -170,6 +178,7 @@ def wait_for_container_ready(container_name: str, timeout: int = None, check_int
             
             if container_name not in result.stdout:
                 print(f"\n✗ Container {container_name} stopped unexpectedly")
+                print_container_logs_hint(container_name)
                 
                 # Check logs for common errors and provide helpful messages
                 result = subprocess.run(
@@ -191,6 +200,29 @@ def wait_for_container_ready(container_name: str, timeout: int = None, check_int
                     else:
                         print(f"\n⚠️  INSUFFICIENT VRAM FOR KV CACHE")
                         print(f"    Try reducing max-model-len in model_config/models.yaml")
+
+                # Check for vLLM startup memory reservation error
+                elif 'Free memory on device' in log_output and 'is less than desired GPU memory utilization' in log_output:
+                    match = re.search(
+                        r'Free memory on device (?P<device>\S+) '
+                        r'\((?P<free>[\d.]+)/(?P<total>[\d.]+) GiB\) '
+                        r'on startup is less than desired GPU memory utilization '
+                        r'\((?P<util>[\d.]+), (?P<desired>[\d.]+) GiB\)',
+                        log_output
+                    )
+                    print(f"\n⚠️  GPU MEMORY UTILIZATION TOO HIGH FOR CURRENT FREE MEMORY")
+                    if match:
+                        free_gib = float(match.group('free'))
+                        total_gib = float(match.group('total'))
+                        suggested_util = max(0.01, (free_gib / total_gib) - 0.02)
+                        print(f"    {match.group('device')} has {free_gib:.2f}/{total_gib:.2f} GiB free at startup.")
+                        print(f"    Requested utilization {match.group('util')} needs about {float(match.group('desired')):.2f} GiB.")
+                        print(f"    Set gpu-memory-utilization below {free_gib / total_gib:.2f}; for example:")
+                        print(f"    gpu-memory-utilization: {suggested_util:.2f}")
+                    else:
+                        print(f"    Reduce gpu-memory-utilization in model_config/models.yaml")
+                        print(f"    or stop other GPU processes before starting this model.")
+                    print(f"    You can also reduce max-model-len or stop other GPU workloads.")
                 
                 # Check for out of memory error during model loading
                 elif 'CUDA out of memory' in log_output and 'Failed to load model' in log_output:
@@ -220,10 +252,12 @@ def wait_for_container_ready(container_name: str, timeout: int = None, check_int
             
         except subprocess.CalledProcessError as e:
             print(f"\n✗ Error checking container: {e}")
+            print_container_logs_hint(container_name)
             return False
     
     if timeout is not None:
         print(f"\n✗ Timeout after {timeout}s")
+        print_container_logs_hint(container_name)
     return False
 
 

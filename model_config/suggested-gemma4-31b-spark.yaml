@@ -1,0 +1,20 @@
+models:
+  - gemma-4-31b-it:
+      model: google/gemma-4-31B-it
+      gpus: [0]
+      tensor-parallel-size: 1
+      gpu-memory-utilization: 0.75
+      max-model-len: 16384
+      max-num-seqs: 8
+      shm-size: 16g
+      dtype: bfloat16
+      reasoning-parser: gemma4
+      tool-call-parser: gemma4
+      max-num-batched-tokens: 4096
+      chat-template: examples/tool_chat_template_gemma4.jinja
+      default-chat-template-kwargs: '{"enable_thinking": true}'
+      limit-mm-per-prompt: '{"image": 1, "audio": 0}'
+      mm-processor-kwargs: '{"max_soft_tokens": 280}'
+      additional_flags:
+        - --enable-auto-tool-choice
+        - --async-scheduling

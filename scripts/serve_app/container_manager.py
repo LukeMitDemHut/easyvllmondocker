@@ -71,17 +71,22 @@ def down_models(model_names: Optional[List[str]] = None) -> None:
             docker_ops.stop_and_remove_container(container_name)
 
 
-def serve_models(model_names: Optional[List[str]] = None, force_reload: bool = False) -> None:
+def serve_models(
+    model_names: Optional[List[str]] = None,
+    force_reload: bool = False,
+    model_config_path: str = "model_config/models.yaml"
+) -> None:
     """
     Serve specified models or all models from config.
     
     Args:
         model_names: List of model names to serve. If None, serves all models from config.
         force_reload: If True, stops and removes existing containers before restarting.
+        model_config_path: Path to the model configuration YAML.
     """
     # Load models configuration
     try:
-        models = config.load_models_config()
+        models = config.load_models_config(model_config_path)
     except config.ConfigurationError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

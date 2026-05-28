@@ -27,6 +27,7 @@ def parse_arguments() -> argparse.Namespace:
 Examples:
   serve                    Serve all models from config
   serve model1 model2      Serve specific models
+  serve --model-config model_config/suggested-gemma4-31b-spark.yaml
   serve stop               Stop all running models
   serve stop model1        Stop a specific model
   serve down               Stop and remove all models
@@ -51,6 +52,12 @@ Examples:
         '--force-reload',
         action='store_true',
         help='Force reload: stop, remove and restart existing containers even if they exist'
+    )
+
+    parser.add_argument(
+        '--model-config',
+        default='model_config/models.yaml',
+        help='Path to model configuration YAML, relative to project root or absolute (default: model_config/models.yaml)'
     )
     
     return parser.parse_args()
@@ -101,17 +108,18 @@ def execute_down_command(model_names: Optional[List[str]]) -> None:
     container_manager.down_models(model_names)
 
 
-def execute_serve_command(model_names: Optional[List[str]], force_reload: bool) -> None:
+def execute_serve_command(model_names: Optional[List[str]], force_reload: bool, model_config_path: str) -> None:
     """
     Execute the serve command.
     
     Args:
         model_names: List of model names to serve, or None for all models
         force_reload: Whether to force reload existing containers
+        model_config_path: Path to the model configuration YAML
     """
     # Load configuration to get model configs
     try:
-        models = config.load_models_config()
+        models = config.load_models_config(model_config_path)
     except config.ConfigurationError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -129,14 +137,14 @@ def execute_serve_command(model_names: Optional[List[str]], force_reload: bool) 
         model_configs = all_model_configs
     
     # Serve the models
-    container_manager.serve_models(model_names, force_reload)
+    container_manager.serve_models(model_names, force_reload, model_config_path)
     
     # Update Prometheus configuration
     prometheus_config = prometheus_integration.get_prometheus_targets(model_configs)
     prometheus_integration.update_prometheus_config(prometheus_config)
 
 
-def update_litellm_gateway() -> None:
+def update_litellm_gateway(model_config_path: str) -> None:
     """
     Update the LiteLLM gateway configuration.
     """
@@ -145,7 +153,7 @@ def update_litellm_gateway() -> None:
         project_root = config.get_project_root()
         docker_ops.run_docker_compose(['up', '-d', 'litellm'], str(project_root))
 
-        litellm_integration.update_litellm()
+        litellm_integration.update_litellm(model_config_path)
 
         print("✓ LiteLLM gateway started (with dependencies)")
     except docker_ops.DockerError as e:
@@ -184,8 +192,8 @@ def main() -> None:
     elif command == 'down':
         execute_down_command(model_names)
     else:  # serve
-        execute_serve_command(model_names, args.force_reload)
+        execute_serve_command(model_names, args.force_reload, args.model_config)
         start_grafana()
     
     # Update LiteLLM gateway after any command
-    update_litellm_gateway()
+    update_litellm_gateway(args.model_config)

@@ -122,6 +122,19 @@ models:
 
 See [Model Configuration Reference](#model-configuration-reference) for all parameters.
 
+Suggested configs are available in `model_config/suggested-*.yaml`. You can run one directly without replacing the default file:
+
+```bash
+./serve --model-config model_config/suggested-gemma4-31b-spark.yaml
+```
+
+Included suggestions:
+
+- `model_config/suggested-gemma4-31b-spark.yaml`: DGX Spark starter for Gemma 4 31B IT with reasoning/tools enabled
+- `model_config/suggested-qwen-vl-4b.yaml`: small single-GPU multimodal starter
+- `model_config/suggested-deepseek-r1-distill-32b.yaml`: single-GPU reasoning starter
+- `model_config/suggested-llama-70b-tp2.yaml`: two-GPU tensor-parallel x86 starter
+
 ### 4. Start Services
 
 ```bash
@@ -250,7 +263,7 @@ docker login nvcr.io
 
 ### Model Configuration Reference
 
-Models are defined in `model_config/models.yaml`.
+Models are defined in `model_config/models.yaml` by default. Suggested configs live in `model_config/suggested-*.yaml` and can be passed with `--model-config`.
 
 #### File Structure
 
@@ -355,6 +368,7 @@ Deploy models from configuration:
 - Skips already running models
 - Registers models with LiteLLM gateway
 - Updates Prometheus monitoring
+- Uses `model_config/models.yaml` unless `--model-config` is provided
 
 **Examples:**
 
@@ -362,6 +376,7 @@ Deploy models from configuration:
 ./serve                    # Deploy all models
 ./serve model1 model2      # Deploy specific models
 ./serve --force-reload     # Force restart existing
+./serve --model-config model_config/suggested-gemma4-31b-spark.yaml
 ```
 
 #### `./serve stop`
@@ -394,7 +409,7 @@ Stop and remove model containers:
 
 ### How It Works
 
-1. **Reads configuration** from `model_config/models.yaml`
+1. **Reads configuration** from `model_config/models.yaml` or the file passed with `--model-config`
 2. **Creates containers** named `inference-<model-identifier>`
 3. **Waits for startup** (monitors logs for "Application startup complete")
 4. **Registers with LiteLLM** using retry logic with exponential backoff

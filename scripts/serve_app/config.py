@@ -34,7 +34,9 @@ def load_models_config(config_path: str = "model_config/models.yaml") -> List[Di
     """
     # Determine the project root (parent of scripts directory)
     script_dir = Path(__file__).parent.parent.parent
-    config_file = script_dir / config_path
+    config_file = Path(config_path)
+    if not config_file.is_absolute():
+        config_file = script_dir / config_file
     
     if not config_file.exists():
         raise ConfigurationError(f"Configuration file {config_file} not found")
