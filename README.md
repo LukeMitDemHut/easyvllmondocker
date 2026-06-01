@@ -365,6 +365,7 @@ models:
 Deploy models from configuration:
 
 - Creates Docker containers for each model
+- Starts stopped/exited model containers from the selected configuration
 - Skips already running models
 - Registers models with LiteLLM gateway
 - Updates Prometheus monitoring
@@ -375,7 +376,7 @@ Deploy models from configuration:
 ```bash
 ./serve                    # Deploy all models
 ./serve model1 model2      # Deploy specific models
-./serve --force-reload     # Force restart existing
+./serve --force-reload     # Recreate containers to apply config changes
 ./serve --model-config model_config/suggested-gemma4-31b-spark.yaml
 ```
 
@@ -414,6 +415,10 @@ Stop and remove model containers:
 3. **Waits for startup** (monitors logs for "Application startup complete")
 4. **Registers with LiteLLM** using retry logic with exponential backoff
 5. **Updates Prometheus** targets for monitoring
+
+### Restart Behavior
+
+Docker Compose services and model containers created by `./serve` use `restart: unless-stopped`, so they come back after host reboot. During `./serve`, startup failures are monitored from the container logs; if a model fails before becoming ready, the script prints a diagnosis and then stops the container to prevent an infinite restart loop.
 
 ### Custom Models in LiteLLM
 

@@ -116,6 +116,7 @@ def serve_models(
     
     # Get existing containers
     existing_containers = docker_ops.get_existing_containers()
+    running_containers = docker_ops.get_running_containers()
     
     # If serving all models, remove containers no longer in config
     if not model_names:
@@ -133,13 +134,18 @@ def serve_models(
                 docker_ops.stop_and_remove_container(container_name)
         # Refresh the list after removal
         existing_containers = docker_ops.get_existing_containers()
+        running_containers = docker_ops.get_running_containers()
     
     # Start/update containers sequentially to avoid GPU memory race conditions
     for model_name, model_config in model_configs.items():
         container_name = docker_ops.get_model_container_name(model_name)
         
-        if container_name in existing_containers:
-            print(f"Container {container_name} already exists (skipping)")
+        if container_name in running_containers:
+            print(f"Container {container_name} already running (skipping)")
+        elif container_name in existing_containers:
+            if docker_ops.start_existing_container(container_name):
+                if not docker_ops.wait_for_container_ready(container_name):
+                    print(f"Warning: {container_name} may not be fully ready", file=sys.stderr)
         else:
             if docker_ops.start_container(container_name, model_name, model_config):
                 # Wait for container to be fully initialized before starting next

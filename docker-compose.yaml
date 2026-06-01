@@ -19,6 +19,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
 
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:16-alpine}
@@ -35,6 +36,7 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
+    restart: unless-stopped
 
   # --- PROMETHEUS ---
   prometheus:

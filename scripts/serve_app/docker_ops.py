@@ -37,6 +37,17 @@ def print_container_logs_hint(container_name: str) -> None:
     print(f"    docker logs {shlex.quote(container_name)}")
 
 
+def stop_failed_startup_container(container_name: str) -> None:
+    """
+    Stop a failed startup container so restart policies do not keep retrying it.
+    """
+    try:
+        subprocess.run(['docker', 'stop', container_name], check=False, capture_output=True)
+        print(f"    Stopped {container_name} to prevent restart loops.")
+    except Exception as e:
+        print(f"    Warning: failed to stop {container_name}: {e}", file=sys.stderr)
+
+
 def get_existing_containers() -> Set[str]:
     """
     Get list of existing inference containers.
@@ -232,6 +243,7 @@ def wait_for_container_ready(container_name: str, timeout: int = None, check_int
                     print(f"    2. Use tensor-parallel-size with multiple GPUs")
                     print(f"    3. Use a smaller model or stronger quantization")
                 
+                stop_failed_startup_container(container_name)
                 return False
             
             # Check logs for startup completion message
@@ -253,11 +265,13 @@ def wait_for_container_ready(container_name: str, timeout: int = None, check_int
         except subprocess.CalledProcessError as e:
             print(f"\n✗ Error checking container: {e}")
             print_container_logs_hint(container_name)
+            stop_failed_startup_container(container_name)
             return False
     
     if timeout is not None:
         print(f"\n✗ Timeout after {timeout}s")
         print_container_logs_hint(container_name)
+        stop_failed_startup_container(container_name)
     return False
 
 
@@ -277,6 +291,29 @@ def stop_container(container_name: str) -> None:
         print(f"✓ {container_name} stopped")
     except subprocess.CalledProcessError as e:
         raise DockerError(f"Failed to stop {container_name}: {e}")
+
+
+def start_existing_container(container_name: str) -> bool:
+    """
+    Start an existing Docker container.
+
+    Args:
+        container_name: Name of the container to start
+
+    Returns:
+        True if container started successfully, False otherwise
+    """
+    print(f"Starting existing container {container_name}...")
+    try:
+        subprocess.run(['docker', 'start', container_name], check=True, capture_output=True, text=True)
+        print(f"✓ {container_name} started")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Error starting {container_name}: {e}", file=sys.stderr)
+        if e.stderr:
+            print(f"  {e.stderr}", file=sys.stderr)
+        print_container_logs_hint(container_name)
+        return False
 
 
 def remove_container(container_name: str) -> None:
@@ -355,6 +392,7 @@ def start_container(
         '-d',  # Detached mode
         '--name', container_name,
         '--runtime', 'nvidia',
+        '--restart', 'unless-stopped',
     ]
     
     # Configure GPU access
