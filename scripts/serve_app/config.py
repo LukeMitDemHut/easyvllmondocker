@@ -5,6 +5,7 @@ Configuration module for loading and managing model configurations.
 import yaml
 import sys
 import os
+import shlex
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -128,16 +129,73 @@ def load_env() -> None:
     This function should be called early in the CLI to ensure all environment
     variables are available for subsequent operations.
     
-    If python-dotenv is not installed, this is a no-op.
+    If python-dotenv is not installed, fall back to a minimal .env parser.
     """
-    if load_dotenv is None:
-        return
+    def _fallback_load_env_file(path: Path) -> None:
+        """
+        Minimal .env loader for environments without python-dotenv.
+        Preserves existing environment variables.
+        """
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                for raw_line in f:
+                    line = raw_line.strip()
+
+                    if not line or line.startswith('#'):
+                        continue
+
+                    if line.startswith('export '):
+                        line = line[len('export '):].strip()
+
+                    if '=' not in line:
+                        continue
+
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+
+                    if not key:
+                        continue
+
+                    # Ignore trailing inline comments for unquoted values.
+                    if value and value[0] not in ('"', "'"):
+                        value = value.split(' #', 1)[0].strip()
+
+                    # Unquote simple quoted values.
+                    if (len(value) >= 2 and value[0] == '"' and value[-1] == '"') or \
+                       (len(value) >= 2 and value[0] == "'" and value[-1] == "'"):
+                        value = value[1:-1]
+                    else:
+                        # Handle escaped characters in unquoted values similarly to shells.
+                        value = shlex.split(value)[0] if value else ''
+
+                    os.environ.setdefault(key, value)
+        except OSError:
+            return
     
+    if load_dotenv is None:
+        print(
+            "Warning: python-dotenv is not installed; .env support is running in fallback mode.\n"
+            "  If you created a virtual environment for this project, activate it first:\n"
+            "    source .venv/bin/activate\n"
+            "  Then install dependencies:\n"
+            "    pip install -r requirements.txt\n"
+            "  Or install globally (not recommended):\n"
+            "    pip3 install -r requirements.txt --break-system-packages",
+            file=sys.stderr,
+        )
+
     env_file = get_project_root() / '.env'
     if env_file.exists():
-        load_dotenv(env_file)
+        if load_dotenv is not None:
+            load_dotenv(env_file)
+        else:
+            _fallback_load_env_file(env_file)
     else:
         # Try .env.example as fallback (for reference)
         env_example = get_project_root() / '.env.example'
         if env_example.exists():
-            load_dotenv(env_example)
+            if load_dotenv is not None:
+                load_dotenv(env_example)
+            else:
+                _fallback_load_env_file(env_example)

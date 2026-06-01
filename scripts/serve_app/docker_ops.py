@@ -8,6 +8,7 @@ import os
 import time
 import re
 import shlex
+import datetime
 from typing import Set, List, Dict, Any, Optional
 
 
@@ -46,68 +47,6 @@ def stop_failed_startup_container(container_name: str) -> None:
         print(f"    Stopped {container_name} to prevent restart loops.")
     except Exception as e:
         print(f"    Warning: failed to stop {container_name}: {e}", file=sys.stderr)
-
-
-def get_container_restart_count(container_name: str) -> Optional[int]:
-    """
-    Get Docker's restart count for a container.
-    """
-    try:
-        result = subprocess.run(
-            ['docker', 'inspect', '-f', '{{.RestartCount}}', container_name],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return int(result.stdout.strip())
-    except (subprocess.CalledProcessError, ValueError):
-        return None
-
-
-def print_startup_diagnostics(container_name: str, log_output: str) -> None:
-    """
-    Parse common vLLM startup failures and print actionable hints.
-    """
-    if 'KV cache is needed, which is larger than the available KV cache memory' in log_output:
-        # Extract suggested max_model_len
-        match = re.search(r'the estimated maximum model length is (\d+)', log_output)
-        if match:
-            suggested_len = match.group(1)
-            print(f"\n⚠️  INSUFFICIENT VRAM FOR KV CACHE")
-            print(f"    Add this to your model configuration in model_config/models.yaml:")
-            print(f"    max-model-len: {suggested_len}")
-        else:
-            print(f"\n⚠️  INSUFFICIENT VRAM FOR KV CACHE")
-            print(f"    Try reducing max-model-len in model_config/models.yaml")
-
-    elif 'Free memory on device' in log_output and 'is less than desired GPU memory utilization' in log_output:
-        match = re.search(
-            r'Free memory on device (?P<device>\S+) '
-            r'\((?P<free>[\d.]+)/(?P<total>[\d.]+) GiB\) '
-            r'on startup is less than desired GPU memory utilization '
-            r'\((?P<util>[\d.]+), (?P<desired>[\d.]+) GiB\)',
-            log_output
-        )
-        print(f"\n⚠️  GPU MEMORY UTILIZATION TOO HIGH FOR CURRENT FREE MEMORY")
-        if match:
-            free_gib = float(match.group('free'))
-            total_gib = float(match.group('total'))
-            suggested_util = max(0.01, (free_gib / total_gib) - 0.02)
-            print(f"    {match.group('device')} has {free_gib:.2f}/{total_gib:.2f} GiB free at startup.")
-            print(f"    Requested utilization {match.group('util')} needs about {float(match.group('desired')):.2f} GiB.")
-            print(f"    Set gpu-memory-utilization below {free_gib / total_gib:.2f}; for example:")
-            print(f"    gpu-memory-utilization: {suggested_util:.2f}")
-        else:
-            print(f"    Reduce gpu-memory-utilization in model_config/models.yaml")
-            print(f"    or stop other GPU processes before starting this model.")
-        print(f"    You can also reduce max-model-len or stop other GPU workloads.")
-
-    elif 'CUDA out of memory' in log_output and 'Failed to load model' in log_output:
-        print(f"\n⚠️  INSUFFICIENT GPU MEMORY TO LOAD MODEL")
-        print(f"    Try one of the following:")
-        print(f"    1. Reduce gpu-memory-utilization (e.g., 0.70)")
-        print(f"    2. Use tensor-parallel-size with multiple GPUs")
-        print(f"    3. Use a smaller model or stronger quantization")
 
 
 def get_existing_containers() -> Set[str]:
@@ -224,6 +163,62 @@ def ensure_network_exists(network_name: str = "inference_default") -> None:
             raise DockerError(f"Error creating network: {e}")
 
 
+def get_container_runtime_state(container_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Get runtime state details for a container.
+
+    Args:
+        container_name: Name of the container
+
+    Returns:
+        Dict with runtime state fields, or None if container cannot be inspected.
+    """
+    try:
+        result = subprocess.run(
+            [
+                'docker', 'inspect', '--format',
+                '{{.State.Running}}|{{.State.Restarting}}|{{.RestartCount}}|{{.State.StartedAt}}|{{.State.Status}}|{{.State.ExitCode}}|{{.State.Error}}',
+                container_name,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        return None
+
+    output = result.stdout.strip()
+    if not output:
+        return None
+
+    # Split at most 6 times to preserve any '|' that may appear in the error string.
+    parts = output.split('|', 6)
+    if len(parts) < 7:
+        return None
+
+    running_raw, restarting_raw, restart_count_raw, started_at, status, exit_code_raw, error_msg = parts
+
+    try:
+        restart_count = int(restart_count_raw)
+    except ValueError:
+        restart_count = 0
+
+    try:
+        exit_code = int(exit_code_raw)
+    except ValueError:
+        exit_code = -1
+
+    return {
+        'running': running_raw.lower() == 'true',
+        'restarting': restarting_raw.lower() == 'true',
+        'restart_count': restart_count,
+        'started_at': started_at,
+        'status': status,
+        'exit_code': exit_code,
+        'error': error_msg,
+    }
+
+
 def wait_for_container_ready(container_name: str, timeout: int = None, check_interval: int = 5) -> bool:
     """
     Wait for container to be healthy by checking logs for startup completion.
@@ -238,19 +233,23 @@ def wait_for_container_ready(container_name: str, timeout: int = None, check_int
     """
     print(f"Waiting for {container_name} to be ready...", end='', flush=True)
     start_time = time.time()
-    initial_restart_count = get_container_restart_count(container_name)
+    # Small lookback avoids missing very early startup lines emitted right before this wait begins.
+    log_since_dt = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=15)
+    log_since = log_since_dt.isoformat(timespec='seconds').replace('+00:00', 'Z')
+
+    initial_state = get_container_runtime_state(container_name)
+    if initial_state is None:
+        print(f"\n✗ Container {container_name} could not be inspected")
+        print_container_logs_hint(container_name)
+        return False
+
+    initial_restart_count = initial_state['restart_count']
+    initial_started_at = initial_state['started_at']
     
     while timeout is None or time.time() - start_time < timeout:
         try:
-            # Check if container is still running
-            result = subprocess.run(
-                ['docker', 'ps', '--filter', f'name={container_name}', '--format', '{{.Names}}'],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            
-            if container_name not in result.stdout:
+            state = get_container_runtime_state(container_name)
+            if state is None or (not state['running'] and not state['restarting']):
                 print(f"\n✗ Container {container_name} stopped unexpectedly")
                 print_container_logs_hint(container_name)
                 
@@ -261,14 +260,77 @@ def wait_for_container_ready(container_name: str, timeout: int = None, check_int
                     text=True
                 )
                 log_output = result.stdout + result.stderr
-                print_startup_diagnostics(container_name, log_output)
                 
+                # Check for KV cache memory error
+                if 'KV cache is needed, which is larger than the available KV cache memory' in log_output:
+                    # Extract suggested max_model_len
+                    match = re.search(r'the estimated maximum model length is (\d+)', log_output)
+                    if match:
+                        suggested_len = match.group(1)
+                        print(f"\n⚠️  INSUFFICIENT VRAM FOR KV CACHE")
+                        print(f"    Add this to your model configuration in model_config/models.yaml:")
+                        print(f"    max-model-len: {suggested_len}")
+                    else:
+                        print(f"\n⚠️  INSUFFICIENT VRAM FOR KV CACHE")
+                        print(f"    Try reducing max-model-len in model_config/models.yaml")
+
+                # Check for vLLM startup memory reservation error
+                elif 'Free memory on device' in log_output and 'is less than desired GPU memory utilization' in log_output:
+                    match = re.search(
+                        r'Free memory on device (?P<device>\S+) '
+                        r'\((?P<free>[\d.]+)/(?P<total>[\d.]+) GiB\) '
+                        r'on startup is less than desired GPU memory utilization '
+                        r'\((?P<util>[\d.]+), (?P<desired>[\d.]+) GiB\)',
+                        log_output
+                    )
+                    print(f"\n⚠️  GPU MEMORY UTILIZATION TOO HIGH FOR CURRENT FREE MEMORY")
+                    if match:
+                        free_gib = float(match.group('free'))
+                        total_gib = float(match.group('total'))
+                        suggested_util = max(0.01, (free_gib / total_gib) - 0.02)
+                        print(f"    {match.group('device')} has {free_gib:.2f}/{total_gib:.2f} GiB free at startup.")
+                        print(f"    Requested utilization {match.group('util')} needs about {float(match.group('desired')):.2f} GiB.")
+                        print(f"    Set gpu-memory-utilization below {free_gib / total_gib:.2f}; for example:")
+                        print(f"    gpu-memory-utilization: {suggested_util:.2f}")
+                    else:
+                        print(f"    Reduce gpu-memory-utilization in model_config/models.yaml")
+                        print(f"    or stop other GPU processes before starting this model.")
+                    print(f"    You can also reduce max-model-len or stop other GPU workloads.")
+                
+                # Check for out of memory error during model loading
+                elif 'CUDA out of memory' in log_output and 'Failed to load model' in log_output:
+                    print(f"\n⚠️  INSUFFICIENT GPU MEMORY TO LOAD MODEL")
+                    print(f"    Try one of the following:")
+                    print(f"    1. Reduce gpu-memory-utilization (e.g., 0.70)")
+                    print(f"    2. Use tensor-parallel-size with multiple GPUs")
+                    print(f"    3. Use a smaller model or stronger quantization")
+                
+                stop_failed_startup_container(container_name)
+                return False
+
+            if state['restart_count'] > initial_restart_count:
+                print(
+                    f"\n✗ Container {container_name} restarted during startup "
+                    f"(restart count {initial_restart_count} -> {state['restart_count']})"
+                )
+                print_container_logs_hint(container_name)
+                if state['error']:
+                    print(f"    Last Docker error: {state['error']}")
+                stop_failed_startup_container(container_name)
+                return False
+
+            if state['started_at'] != initial_started_at:
+                print(
+                    f"\n✗ Container {container_name} start timestamp changed during readiness wait "
+                    f"({initial_started_at} -> {state['started_at']})"
+                )
+                print_container_logs_hint(container_name)
                 stop_failed_startup_container(container_name)
                 return False
             
             # Check logs for startup completion message
             result = subprocess.run(
-                ['docker', 'logs', container_name],
+                ['docker', 'logs', '--since', log_since, container_name],
                 capture_output=True,
                 text=True
             )
@@ -278,18 +340,6 @@ def wait_for_container_ready(container_name: str, timeout: int = None, check_int
                 elapsed = int(time.time() - start_time)
                 print(f" ready in {elapsed}s ✓")
                 return True
-
-            restart_count = get_container_restart_count(container_name)
-            if (
-                initial_restart_count is not None
-                and restart_count is not None
-                and restart_count > initial_restart_count
-            ):
-                print(f"\n✗ Container {container_name} restarted during startup")
-                print_container_logs_hint(container_name)
-                print_startup_diagnostics(container_name, log_output)
-                stop_failed_startup_container(container_name)
-                return False
             
             print('.', end='', flush=True)
             time.sleep(check_interval)
