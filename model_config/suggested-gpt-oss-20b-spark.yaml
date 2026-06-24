@@ -1,0 +1,7 @@
+# !!! Note, on spark you will have to manually seed the tiktoken cache because of an issue with openai harmony, read more in readme
+
+models:
+  - openai/gpt-oss-20b:
+      model: openai/gpt-oss-20b
+      tensor-parallel-size: 1
+      gpu-memory-utilization: 0.75

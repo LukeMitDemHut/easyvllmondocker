@@ -3,6 +3,7 @@ Command-line interface module for the serve application.
 """
 
 import argparse
+import os
 import sys
 from typing import Optional, List, Tuple
 
@@ -58,6 +59,12 @@ Examples:
         '--model-config',
         default='model_config/models.yaml',
         help='Path to model configuration YAML, relative to project root or absolute (default: model_config/models.yaml)'
+    )
+    
+    parser.add_argument(
+        '--offline',
+        action='store_true',
+        help='Force offline mode: skip image pulls and set HF_HUB_OFFLINE=1 so vLLM uses only cached models (for air-gapped environments)'
     )
     
     return parser.parse_args()
@@ -185,6 +192,12 @@ def main() -> None:
     
     args = parse_arguments()
     command, model_names = resolve_command_and_models(args)
+    
+    # Propagate --offline flag via environment variable so that downstream
+    # modules (docker_ops) can detect offline mode without changing every
+    # function signature in the call chain.
+    if args.offline:
+        os.environ['SERVE_OFFLINE'] = '1'
     
     # Execute command
     if command == 'stop':

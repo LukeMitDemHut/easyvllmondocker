@@ -625,6 +625,44 @@ nvidia-smi
   ```
   **Why this happens**: vLLM uses shared memory for inter-process communication between GPU workers. The default Docker shared memory size (64MB) is insufficient for multi-GPU setups. Use 8GB or higher for tensor-parallel deployments.
 
+### Air-Gapped / Offline Environments
+
+When the device has no internet access (air-gapped), vLLM crashes during model loading because it tries to contact the HuggingFace Hub to list repository files (e.g. `is_mistral_model_repo` → `hf_list_repo_files`). The serve script detects this automatically and sets `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1` so vLLM uses only the local model cache.
+
+**Prerequisites for offline use:**
+
+1. **Pre-download models** while online:
+   ```bash
+   # Download the model to the persistent HuggingFace cache
+   huggingface-cli download google/gemma-4-26B-A4B-it
+   ```
+   The cache lives at `~/.cache/huggingface` (or `$HUGGINGFACE_CACHE`) and is mounted into every vLLM container.
+
+2. **Pre-pull the vLLM Docker image** while online:
+   ```bash
+   docker pull vllm/vllm-openai:v0.22.0-cu129
+   ```
+   The serve script skips `docker pull` when offline, so the image must already be present locally.
+
+3. **Seed the tiktoken cache** for GPT-OSS models (see the troubleshooting entry above).
+
+**Running offline:**
+
+The script auto-detects offline mode by attempting a TCP connection to `huggingface.co:443`. If you want to force offline mode (e.g. behind a restrictive proxy that causes hangs), use the `--offline` flag:
+
+```bash
+./serve --offline
+```
+
+Or set the environment variable:
+
+```bash
+export SERVE_OFFLINE=1
+./serve
+```
+
+Both methods skip `docker pull` and inject `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1` into the vLLM container, preventing all network requests during model loading.
+
 ### LiteLLM Connection Issues
 
 **Verify service is running:**

@@ -8,6 +8,7 @@ import os
 import time
 import re
 import shlex
+import socket
 import datetime
 from typing import Set, List, Dict, Any, Optional
 
@@ -15,6 +16,23 @@ from typing import Set, List, Dict, Any, Optional
 class DockerError(Exception):
     """Raised when a Docker operation fails."""
     pass
+
+
+def is_offline() -> bool:
+    """
+    Detect whether the device is offline (air-gapped).
+
+    Returns True if the SERVE_OFFLINE environment variable is set to a
+    truthy value, or if a TCP connection to huggingface.co:443 fails
+    within a short timeout (indicating no internet access).
+    """
+    if os.environ.get('SERVE_OFFLINE', '').lower() in ('1', 'true', 'yes'):
+        return True
+    try:
+        socket.create_connection(('huggingface.co', 443), timeout=3)
+        return False
+    except (socket.timeout, OSError):
+        return True
 
 
 def _redact_command(cmd: List[str]) -> str:
@@ -549,20 +567,36 @@ def start_container(
     if 'HF_TOKEN' in os.environ:
         cmd.extend(['-e', f'HF_TOKEN={os.environ["HF_TOKEN"]}'])
 
+    # In offline (air-gapped) environments, instruct HuggingFace libraries to
+    # use only the local model cache and never attempt network requests.
+    # This prevents vLLM's is_mistral_model_repo() / hf_list_repo_files()
+    # from crashing with DNS resolution errors during model loading.
+    offline = is_offline()
+    if offline:
+        print(f"  [offline] Injecting HF_HUB_OFFLINE=1 / TRANSFORMERS_OFFLINE=1 into {container_name}")
+        cmd.extend([
+            '-e', 'HF_HUB_OFFLINE=1',
+            '-e', 'TRANSFORMERS_OFFLINE=1',
+        ])
+
     if vllm_platform:
         cmd.extend(['--platform', vllm_platform])
 
     # Pull explicitly so users see progress before the detached container exists.
-    pull_cmd = ['docker', 'pull']
-    if vllm_platform:
-        pull_cmd.extend(['--platform', vllm_platform])
-    pull_cmd.append(vllm_image)
-    print(f"Pulling image: {_redact_command(pull_cmd)}")
-    try:
-        subprocess.run(pull_cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error pulling vLLM image {vllm_image}: {e}", file=sys.stderr)
-        return False
+    # Skip when offline – the image must already be present locally.
+    if offline:
+        print(f"  [offline] Skipping image pull – using local image: {vllm_image}")
+    else:
+        pull_cmd = ['docker', 'pull']
+        if vllm_platform:
+            pull_cmd.extend(['--platform', vllm_platform])
+        pull_cmd.append(vllm_image)
+        print(f"Pulling image: {_redact_command(pull_cmd)}")
+        try:
+            subprocess.run(pull_cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error pulling vLLM image {vllm_image}: {e}", file=sys.stderr)
+            return False
     
     # Add image and vllm command
     cmd.extend([

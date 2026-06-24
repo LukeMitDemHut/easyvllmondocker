@@ -107,6 +107,20 @@ def serve_models(
     
     print(f"=== Serving {len(model_configs)} model(s) ===")
     
+    # Show a prominent banner when offline mode is active so users know
+    # immediately that image pulls are skipped and HF_HUB_OFFLINE is set.
+    if docker_ops.is_offline():
+        print()
+        print("╔══════════════════════════════════════════════════════════════╗")
+        print("║                  OFFLINE MODE (AIR-GAPPED)                   ║")
+        print("║                                                              ║")
+        print("║  • Docker image pulls are SKIPPED (using local images)       ║")
+        print("║  • HF_HUB_OFFLINE=1 / TRANSFORMERS_OFFLINE=1 injected        ║")
+        print("║  • vLLM will load models from local cache only               ║")
+        print("║  • Ensure models are pre-downloaded to HUGGINGFACE_CACHE     ║")
+        print("╚══════════════════════════════════════════════════════════════╝")
+        print()
+    
     # Ensure network exists
     try:
         docker_ops.ensure_network_exists()
