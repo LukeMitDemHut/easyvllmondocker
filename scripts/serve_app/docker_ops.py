@@ -304,6 +304,14 @@ def wait_for_container_ready(container_name: str, timeout: int = None, check_int
                     print(f"    1. Reduce gpu-memory-utilization (e.g., 0.70)")
                     print(f"    2. Use tensor-parallel-size with multiple GPUs")
                     print(f"    3. Use a smaller model or stronger quantization")
+
+                # Check for openai_harmony vocab download/cache error (common for GPT-OSS)
+                elif 'openai_harmony.HarmonyError: error downloading or loading vocab file' in log_output:
+                    print(f"\n⚠️  OPENAI_HARMONY VOCAB DOWNLOAD/CACHE ERROR")
+                    print(f"    Detected failure while loading GPT-OSS harmony encoding files.")
+                    print(f"    Ensure the container has a persistent tiktoken cache.")
+                    print(f"    This project mounts host cache to /tmp/tiktoken-rs-cache via TIKTOKEN_RS_CACHE_DIR.")
+                    print(f"    If first startup happened without this mount, run with --force-reload.")
                 
                 stop_failed_startup_container(container_name)
                 return False
@@ -336,6 +344,16 @@ def wait_for_container_ready(container_name: str, timeout: int = None, check_int
             )
             
             log_output = result.stdout + result.stderr
+
+            # Fail fast on known GPT-OSS harmony vocab error to avoid long pointless waits.
+            if 'openai_harmony.HarmonyError: error downloading or loading vocab file' in log_output:
+                print(f"\n✗ openai_harmony vocab download/load failed during startup")
+                print("    Verify network/TLS access and persistent tiktoken cache availability.")
+                print("    If needed, pre-seed cache online and then retry with --force-reload.")
+                print_container_logs_hint(container_name)
+                stop_failed_startup_container(container_name)
+                return False
+
             if 'Application startup complete' in log_output:
                 elapsed = int(time.time() - start_time)
                 print(f" ready in {elapsed}s ✓")
@@ -465,8 +483,21 @@ def start_container(
     gpus = flat_params.get('gpus', None)  # List of GPU IDs or None for all
     cpuset_cpus = flat_params.get('cpuset-cpus', None)  # List of CPU IDs or string
     shm_size = flat_params.get('shm-size', None)  # Shared memory size (e.g., '8g', '512m')
-    vllm_image = os.environ.get('VLLM_IMAGE', 'vllm/vllm-openai:v0.20.2-cu129')
+    vllm_image = os.environ.get('VLLM_IMAGE', 'vllm/vllm-openai:v0.22.0-cu129')
     vllm_platform = os.environ.get('VLLM_PLATFORM')
+    def _resolve_host_path(path_value: str) -> str:
+        # Support values like ${HOME}/... and ~/... coming from .env.
+        return os.path.expanduser(os.path.expandvars(path_value))
+
+    tiktoken_cache_host = _resolve_host_path(
+        os.environ.get('TIKTOKEN_RS_CACHE_DIR', '~/.cache/tiktoken-rs-cache')
+    )
+    huggingface_cache_host = _resolve_host_path(
+        os.environ.get('HUGGINGFACE_CACHE', '~/.cache/huggingface')
+    )
+
+    # Keep openai_harmony/tiktoken artifacts on host so first online boot seeds offline runs.
+    os.makedirs(tiktoken_cache_host, exist_ok=True)
     
     # Build docker run command
     cmd = [
@@ -509,7 +540,9 @@ def start_container(
         '--network', network,
         '--label', 'inference.managed=true',
         '--label', f'inference.model={model_name}',
-        '-v', f'{os.environ.get("HUGGINGFACE_CACHE", os.path.expanduser("~/.cache/huggingface"))}:/root/.cache/huggingface',
+        '-v', f'{huggingface_cache_host}:/root/.cache/huggingface',
+        '-v', f'{tiktoken_cache_host}:/tmp/tiktoken-rs-cache',
+        '-e', 'TIKTOKEN_RS_CACHE_DIR=/tmp/tiktoken-rs-cache',
     ])
     
     # Add HF_TOKEN if available

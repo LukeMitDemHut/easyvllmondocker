@@ -234,7 +234,7 @@ See [CLI Reference](#cli-reference) for detailed usage.
 | `GATEWAY_PORT`         | LiteLLM gateway port                           | `8000`                 |
 | `HUGGINGFACE_CACHE`    | Model cache directory                          | `~/.cache/huggingface` |
 | `LITELLM_NUM_WORKERS`  | Number of LiteLLM worker threads               | `4`                    |
-| `VLLM_IMAGE`           | vLLM OpenAI-compatible server image            | `vllm/vllm-openai:v0.20.2-cu129` |
+| `VLLM_IMAGE`           | vLLM OpenAI-compatible server image            | `vllm/vllm-openai:v0.22.0-cu129` |
 | `VLLM_PLATFORM`        | Optional Docker platform for vLLM containers   | Empty                  |
 
 #### Image and Platform Configuration
@@ -592,6 +592,18 @@ nvidia-smi
 
 - Out of GPU memory: Reduce `gpu-memory-utilization` in models.yaml
 - Model download failed: Check `HF_TOKEN` is set correctly
+- `openai_harmony.HarmonyError: error downloading or loading vocab file`: GPT-OSS needs tiktoken vocab cache files. Keep `TIKTOKEN_RS_CACHE_DIR` persistent (default `~/.cache/tiktoken-rs-cache`), run once online to seed cache, then retry with `./serve --force-reload` for offline use.
+- Manual cache seeding: if you want to avoid loading Harmony just to populate the cache, download the vocab file directly and rename it to the expected SHA-1 filename:
+  ```bash
+  cache_dir="$HOME/.cache/tiktoken-rs-cache"
+  file_url='https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken'
+  file_hash=$(printf '%s' "$file_url" | sha1sum | awk '{print $1}')
+
+  mkdir -p "$cache_dir"
+  curl -fsSL "$file_url" -o "$cache_dir/o200k_base.tiktoken"
+  mv -f "$cache_dir/o200k_base.tiktoken" "$cache_dir/$file_hash"
+  ```
+  Make sure `TIKTOKEN_RS_CACHE_DIR` points at the same directory inside and outside the container.
 - Container exits immediately: Check logs for configuration errors
 - No loading dots and no model container yet: the CLI is still pulling `VLLM_IMAGE`; wait for the visible `docker pull` progress to finish before readiness checks begin
 - `no matching manifest for linux/arm64`: The selected image does not publish a native DGX Spark/ARM64 build. Use an ARM64-capable tag in `VLLM_IMAGE` or leave `VLLM_PLATFORM` empty if Docker is already selecting the correct host architecture.
