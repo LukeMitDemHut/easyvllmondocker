@@ -1,0 +1,10 @@
+models:
+  - Soofi-Project/Soofi-S-Rhine-Preview:
+      model: Soofi-Project/Soofi-S-Rhine-Preview
+      gpus: [0]
+      tensor-parallel-size: 1
+      gpu-memory-utilization: 0.75
+      reasoning-parser: qwen3
+      tool-call-parser: qwen3_xml
+      additional_flags:
+        - --trust-remote-code
