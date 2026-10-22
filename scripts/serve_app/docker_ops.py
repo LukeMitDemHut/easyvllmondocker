@@ -35,6 +35,20 @@ def is_offline() -> bool:
         return True
 
 
+def _image_present_locally(image: str) -> bool:
+    """
+    Return True when the docker daemon already has the image locally.
+
+    Used to skip redundant pulls, e.g. for locally built per-model images
+    that are not in any registry.
+    """
+    result = subprocess.run(
+        ['docker', 'image', 'inspect', image],
+        capture_output=True, text=True,
+    )
+    return result.returncode == 0
+
+
 def _redact_command(cmd: List[str]) -> str:
     """
     Format a command for display while hiding sensitive environment values.
@@ -501,8 +515,12 @@ def start_container(
     gpus = flat_params.get('gpus', None)  # List of GPU IDs or None for all
     cpuset_cpus = flat_params.get('cpuset-cpus', None)  # List of CPU IDs or string
     shm_size = flat_params.get('shm-size', None)  # Shared memory size (e.g., '8g', '512m')
-    vllm_image = os.environ.get('VLLM_IMAGE', 'vllm/vllm-openai:v0.22.0-cu129')
-    vllm_platform = os.environ.get('VLLM_PLATFORM')
+    # Per-model overrides (YAML) take precedence over the .env/global image
+    # settings, allowing separate model configs to use different images.
+    vllm_image = (flat_params.get('vllm-image') or flat_params.get('vllm_image')
+                  or os.environ.get('VLLM_IMAGE', 'vllm/vllm-openai:v0.22.0-cu129'))
+    vllm_platform = (flat_params.get('vllm-platform') or flat_params.get('vllm_platform')
+                     or os.environ.get('VLLM_PLATFORM'))
     def _resolve_host_path(path_value: str) -> str:
         # Support values like ${HOME}/... and ~/... coming from .env.
         return os.path.expanduser(os.path.expandvars(path_value))
@@ -583,9 +601,13 @@ def start_container(
         cmd.extend(['--platform', vllm_platform])
 
     # Pull explicitly so users see progress before the detached container exists.
-    # Skip when offline – the image must already be present locally.
+    # Skip when offline: the image must already be present locally.
+    # Skip when the image already exists locally (locally built images are
+    # not in any registry, and re-pulling would only waste time/bandwidth).
     if offline:
-        print(f"  [offline] Skipping image pull – using local image: {vllm_image}")
+        print(f"  [offline] Skipping image pull - using local image: {vllm_image}")
+    elif _image_present_locally(vllm_image):
+        print(f"  Image present locally, skipping pull: {vllm_image}")
     else:
         pull_cmd = ['docker', 'pull']
         if vllm_platform:
@@ -608,7 +630,7 @@ def start_container(
     
     # Add all other parameters as vLLM flags
     for key, value in flat_params.items():
-        if key not in ['model', 'gpus', 'cpuset-cpus', 'shm-size', 'additional_flags']:
+        if key not in ['model', 'gpus', 'cpuset-cpus', 'shm-size', 'additional_flags', 'vllm-image', 'vllm_image', 'vllm-platform', 'vllm_platform']:
             # Convert underscores to hyphens for command-line flags
             flag_name = key.replace('_', '-')
             cmd.extend([f'--{flag_name}', str(value)])
