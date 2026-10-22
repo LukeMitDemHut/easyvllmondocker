@@ -354,6 +354,45 @@ models:
 - **Set `shm-size` for tensor-parallel models**: Use `8g` or higher for multi-GPU setups to avoid shared memory errors
 - Monitor with `nvidia-smi`
 
+#### Models Requiring Custom Images
+
+Some models need a vLLM image other than the global `VLLM_IMAGE` from `.env`.
+Set `vllm-image:` (and optionally `vllm-platform:`) **per model** in the YAML
+config; it overrides `VLLM_IMAGE` only for that model container:
+
+```yaml
+models:
+  - Aleph-Alpha/Kolibri-1:
+      model: Aleph-Alpha/Kolibri-1
+      vllm-image: easyvllm/aleph-alpha-inference:1.0.0-vllm0.29.0-arm64
+```
+
+Precedence: YAML `vllm-image` > `.env` `VLLM_IMAGE` > default
+`vllm/vllm-openai:v0.22.0-cu129` (same precedence for `vllm-platform`).
+
+`./serve` skips the registry pull when the image already exists locally, so
+locally built images work out of the box and daily restarts stay pull-free.
+
+**Example: Aleph Alpha Kolibri-1 on DGX Spark (arm64).** Kolibri requires the
+vendor plugin package `aleph-alpha-inference` (model class `Kolibri1ForCausalLM`
+plus the `kolibri1` reasoning/tool parsers). The published vendor image is
+amd64-only, but the plugin is a tiny pure-Python wheel, so a stock vLLM arm64
+image plus one pip layer is sufficient. The repository ships the recipe:
+
+```bash
+docker build -t easyvllm/aleph-alpha-inference:1.0.0-vllm0.29.0-arm64 images/aleph-alpha-inference/
+```
+
+On amd64 servers, use the official published image instead:
+
+```yaml
+vllm-image: ghcr.io/aleph-alpha/aleph-alpha-inference:1.0.0-vllm0.29.0
+```
+
+See `model_config/suggested-aleph-alpha-kolibri-1.yaml` for the full config,
+including the `linear-backend: triton` override required on GB10 (SM12x)
+hardware, where the default cutlass block-scale FP8 kernel is not supported.
+
 ---
 
 ## CLI Reference
