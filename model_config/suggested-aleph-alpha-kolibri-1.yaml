@@ -1,0 +1,24 @@
+# Aleph Alpha Kolibri-1 needs the vendor vLLM plugin (aleph-alpha-inference).
+# The stock vllm/vllm-openai image does NOT provide the kolibri1 model/parsers.
+#
+#   - amd64 servers: no build needed, point vllm-image at the official image:
+#       ghcr.io/aleph-alpha/aleph-alpha-inference:1.0.0-vllm0.29.0
+#   - DGX Spark (arm64): the upstream image is amd64-only, so build the thin
+#     arm64 image from this repo first (see README "Models Requiring Custom Images"):
+#       docker build -t easyvllm/aleph-alpha-inference:1.0.0-vllm0.29.0-arm64 images/aleph-alpha-inference/
+models:
+  - Aleph-Alpha/Kolibri-1:
+      model: Aleph-Alpha/Kolibri-1
+      # Thin image: stock arm64 vLLM + the vendor plugin (built from images/).
+      vllm-image: easyvllm/aleph-alpha-inference:1.0.0-vllm0.29.0-arm64
+      gpus: [0]
+      tensor-parallel-size: 1
+      # GB10 (SM12x) has no compatible cutlass block-scale fp8 kernel;
+      # force the portable triton fp8 kernel (see README).
+      linear-backend: triton
+      gpu-memory-utilization: 0.75
+      reasoning-parser: kolibri1
+      tool-call-parser: kolibri1
+      kv-cache-dtype: fp8
+      additional_flags:
+        - --enable-auto-tool-choice
